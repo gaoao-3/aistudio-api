@@ -11,7 +11,7 @@ Playwright storage state in the native account store.
 
 ```powershell
 pnpm install
-.\start.ps1 -Port 48370
+.\start.ps1 -Port 3006
 ```
 
 `start.ps1` automatically reuses the sibling `aistudio-api/data` runtime when
