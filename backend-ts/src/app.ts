@@ -322,6 +322,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     readonly models: Record<string, unknown>[];
     readonly source: "live" | "fallback";
   }> {
+    // 未配置上游 key 时不触发浏览器和外部 ListModels 请求，直接提供可用的本地目录。
+    if (!settings.upstreamApiKey) return { models: FALLBACK_MODELS.map(modelCard), source: "fallback" };
     try {
       const models = await bridge.request<unknown>("models");
       if (Array.isArray(models)) {

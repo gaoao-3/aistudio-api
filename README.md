@@ -136,7 +136,7 @@ x-goog-api-key: <key>
 |:---:|---|---|
 | `GET` | `/health` | 服务健康检查 |
 | `GET` | `/auth/check` | 鉴权和运行能力检查 |
-| `GET` | `/v1beta/models` | 读取实时模型目录 |
+| `GET` | `/v1beta/models` | 读取实时模型目录；未配置上游 key 或读取失败时返回内置 fallback |
 | `GET` | `/v1beta/models/{model}` | 读取单个模型信息 |
 | `POST` | `/v1beta/models/{model}:generateContent` | Gemini 原生非流式生成 |
 | `POST` | `/v1beta/models/{model}:streamGenerateContent` | Gemini 原生 SSE 流式生成 |
@@ -249,7 +249,7 @@ result = client.interactions.create(
 ```
 
 > [!IMPORTANT]
-> Embedding 需要配置可以调用 Gemini API 的真实 key。AI Studio 网页使用的公开 key 不能用于 `BatchEmbedContents`：
+> 上游 key 可在 WebUI「服务设置」中配置，也可以通过环境变量设置。未配置时模型目录使用内置 fallback；Embedding 必须使用可以调用 Gemini API 的真实 key，不能使用 AI Studio 网页 key：
 
 ```dotenv
 AISTUDIO_UPSTREAM_API_KEY=your-gemini-api-key
@@ -316,7 +316,7 @@ AISTUDIO_UPSTREAM_API_KEY=your-gemini-api-key
 |------|--------|------|
 | `AISTUDIO_LOGIN_TIMEOUT_MS` | `600000` | 登录流程最长等待时间 |
 | `AISTUDIO_LOGIN_SESSION_RETENTION_MS` | `600000` | 已结束登录会话保留时间 |
-| `AISTUDIO_UPSTREAM_API_KEY` | 内置 AI Studio key | Embedding 必须改为可调用 Gemini API 的真实 key |
+| `AISTUDIO_UPSTREAM_API_KEY` | 空 | 可选的实时模型目录 key；Embedding 必须配置可调用 Gemini API 的真实 key |
 | `AISTUDIO_EMBEDDING_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta` | Embedding 上游地址 |
 
 ### 🗄️ 数据与账号轮询

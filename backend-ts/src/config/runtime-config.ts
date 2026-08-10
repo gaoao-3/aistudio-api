@@ -51,6 +51,7 @@ interface SettingDef {
   readonly unit?: string;
   readonly options?: ReadonlyArray<SettingOption>;
   readonly defaultValue: SettingValue;
+  readonly sensitive?: boolean;
   readonly readEffective: () => SettingValue;
 }
 
@@ -165,7 +166,18 @@ const SETTING_DEFS: ReadonlyArray<SettingDef> = [
     description: "CloakBrowser 使用的代理地址，留空使用系统代理",
     type: "string",
     defaultValue: "",
+    sensitive: true,
     readEffective: () => settings.proxyUrl ?? "",
+  },
+  {
+    key: "upstream_api_key",
+    env: "AISTUDIO_UPSTREAM_API_KEY",
+    label: "上游 API Key",
+    description: "可选。用于读取实时模型目录；Embedding 必须填写可调用 Gemini API 的真实 key。保存后需重启服务",
+    type: "string",
+    defaultValue: "",
+    sensitive: true,
+    readEffective: () => settings.upstreamApiKey,
   },
 ];
 
@@ -252,6 +264,10 @@ function redactProxyUrl(value: string): string {
   return value.replace(/^(\s*[a-z][a-z\d+.-]*:\/\/)([^/@\s]+)@/iu, "$1***:***@");
 }
 
+function redactSecret(value: string): string {
+  return value ? "********" : "";
+}
+
 function envLineRegex(envName: string): RegExp {
   return new RegExp(`^\\s*${envName}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|.*?)\\s*(?:#.*)?$`, "mu");
 }
@@ -287,12 +303,15 @@ export class RuntimeConfigStore {
     const source = await this.readSource();
     const views: RuntimeSettingView[] = SETTING_DEFS.map((def) => {
       const parsedConfigured = parseEnvValue(def, readEnvValue(source, def.env));
-      // 代理项留空表示回退到 HTTPS_PROXY/HTTP_PROXY，与未配置等价。
-      const configuredValue = def.key === "proxy_url" && parsedConfigured === "" ? null : parsedConfigured;
+      // 代理和上游 key 留空都表示未配置；前者回退系统代理，后者禁用实时模型目录。
+      const configuredValue = ["proxy_url", "upstream_api_key"].includes(def.key) && parsedConfigured === ""
+        ? null
+        : parsedConfigured;
       const effectiveValue = def.readEffective();
-      const sensitive = def.key === "proxy_url";
-      const configured = sensitive && typeof configuredValue === "string" ? redactProxyUrl(configuredValue) : configuredValue;
-      const effective = sensitive && typeof effectiveValue === "string" ? redactProxyUrl(effectiveValue) : effectiveValue;
+      const sensitive = def.sensitive === true;
+      const redact = def.key === "proxy_url" ? redactProxyUrl : redactSecret;
+      const configured = sensitive && typeof configuredValue === "string" ? redact(configuredValue) : configuredValue;
+      const effective = sensitive && typeof effectiveValue === "string" ? redact(effectiveValue) : effectiveValue;
       return {
         key: def.key,
         env: def.env,
@@ -308,7 +327,7 @@ export class RuntimeConfigStore {
         effective,
         configured,
         ...(sensitive ? { sensitive: true } : {}),
-        restart_required: configured !== null && configured !== effective,
+        restart_required: configuredValue !== null && configuredValue !== effectiveValue,
       };
     });
     const body = views.find((view) => view.key === "body_limit_bytes");

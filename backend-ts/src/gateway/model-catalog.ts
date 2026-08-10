@@ -32,6 +32,7 @@ export function parseModelCatalog(payload: unknown): Record<string, unknown>[] {
 }
 
 export async function fetchModelCatalog(session: NativeBrowserSession): Promise<Record<string, unknown>[]> {
+  if (!settings.upstreamApiKey) throw new Error("AISTUDIO_UPSTREAM_API_KEY is not configured");
   const byName = new Map((await session.cookies()).map(cookie => [cookie.name, cookie.value]));
   const timestamp = Math.floor(Date.now() / 1000);
   const labels = [

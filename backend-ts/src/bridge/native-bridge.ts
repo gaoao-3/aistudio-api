@@ -487,7 +487,7 @@ export class NativeBackendBridge implements BackendBridge {
   private requireEmbeddingKey(): void {
     if (!settings.upstreamApiKeyExplicit) {
       throw new BridgeError(503, {
-        message: "Embedding requires AISTUDIO_UPSTREAM_API_KEY; the AI Studio web key is blocked for BatchEmbedContents",
+        message: "Embedding requires an explicit AISTUDIO_UPSTREAM_API_KEY; configure a Gemini API key",
         type: "upstream_configuration_error",
       });
     }

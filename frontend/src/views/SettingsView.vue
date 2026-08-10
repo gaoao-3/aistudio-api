@@ -14,7 +14,14 @@ onMounted(loadRuntimeConfig);
 function displayValue(v: string | number | boolean | null | undefined, unit?: string): string {
   if (v === null || v === undefined) return '未配置';
   if (typeof v === 'boolean') return v ? '开' : '关';
+  if (typeof v === 'string' && !v) return '未配置';
   return unit ? `${v} ${unit}` : String(v);
+}
+
+function inputPlaceholder(key: string, sensitive?: boolean): string {
+  if (key === 'upstream_api_key') return '输入完整 API Key；未修改请直接保存';
+  if (sensitive) return '输入完整代理地址；未修改请直接保存';
+  return '留空使用系统默认';
 }
 </script>
 
@@ -84,7 +91,8 @@ function displayValue(v: string | number | boolean | null | undefined, unit?: st
         <NInput
           v-else
           :value="typeof setting.input === 'string' ? setting.input : ''"
-          :placeholder="setting.sensitive ? '输入完整代理地址；未修改请直接保存' : '留空使用系统默认'"
+          :type="setting.key === 'upstream_api_key' ? 'password' : 'text'"
+          :placeholder="inputPlaceholder(setting.key, setting.sensitive)"
           class="w-full"
           @update:value="(v: string) => setting.input = v"
         />

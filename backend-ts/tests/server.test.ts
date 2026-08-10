@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { ApiKeyStore } from "../src/auth/api-key-store.js";
 import { buildApp } from "../src/app.js";
 import type { BackendBridge } from "../src/bridge/backend-bridge.js";
+import { settings } from "../src/config.js";
 import { InteractionStore } from "../src/interactions/store.js";
 
 class MockBridge implements BackendBridge {
@@ -119,6 +120,9 @@ test("system status identifies Fastify and the native backend", async (t) => {
 });
 
 test("model catalog reports whether it came from AI Studio or the fallback", async (t) => {
+  const originalUpstreamApiKey = settings.upstreamApiKey;
+  t.after(() => { settings.upstreamApiKey = originalUpstreamApiKey; });
+  settings.upstreamApiKey = "test-upstream-key";
   const liveBridge = new MockBridge([{ name: "models/gemini-3.6-flash", displayName: "Gemini 3.6 Flash" }]);
   const live = await fixture(liveBridge);
   t.after(async () => { await live.app.close(); await rm(live.directory, { recursive: true, force: true }); });
@@ -127,12 +131,15 @@ test("model catalog reports whether it came from AI Studio or the fallback", asy
   assert.equal(liveResponse.json().source, "live");
   assert.equal(liveResponse.json().models[0].name, "models/gemini-3.6-flash");
 
+  settings.upstreamApiKey = "";
   const fallback = await fixture();
   t.after(async () => { await fallback.app.close(); await rm(fallback.directory, { recursive: true, force: true }); });
   const fallbackResponse = await fallback.app.inject({ method: "GET", url: "/v1beta/models" });
   assert.equal(fallbackResponse.statusCode, 200);
   assert.equal(fallbackResponse.json().source, "fallback");
   assert.ok(fallbackResponse.json().models.length > 0);
+  assert.equal(fallback.bridge.calls.some((call) => call.method === "models"), false);
+  settings.upstreamApiKey = originalUpstreamApiKey;
 });
 
 test("runtime config exposes settings and can be configured from the API", async (t) => {
@@ -148,6 +155,10 @@ test("runtime config exposes settings and can be configured from the API", async
   assert.equal(body.configured, null);
   assert.equal(initialPayload.effective_body_limit_bytes, initialPayload.configured_body_limit_bytes);
   assert.equal(initialPayload.restart_required, false);
+  const upstream = initialPayload.settings.find((s: { key: string }) => s.key === "upstream_api_key");
+  assert.ok(upstream);
+  assert.equal(upstream.configured, null);
+  assert.equal(upstream.effective, "");
 
   const saved = await state.app.inject({
     method: "PUT",
@@ -163,6 +174,18 @@ test("runtime config exposes settings and can be configured from the API", async
   const rereadBody = reread.json().settings.find((s: { key: string }) => s.key === "body_limit_bytes");
   assert.equal(rereadBody.configured, 64);
   assert.equal(rereadBody.restart_required, true);
+
+  const savedUpstream = await state.app.inject({
+    method: "PUT",
+    url: "/config/runtime",
+    payload: { upstream_api_key: "test-upstream-key" },
+  });
+  assert.equal(savedUpstream.statusCode, 200);
+  const savedUpstreamSetting = savedUpstream.json().settings.find((s: { key: string }) => s.key === "upstream_api_key");
+  assert.equal(savedUpstreamSetting.configured, "********");
+  assert.equal(savedUpstreamSetting.effective, "");
+  assert.equal(savedUpstreamSetting.restart_required, true);
+  assert.doesNotMatch(JSON.stringify(savedUpstream.json()), /test-upstream-key/u);
 
   // 布尔配置项
   const savedHeadless = await state.app.inject({
@@ -187,6 +210,7 @@ test("runtime config exposes settings and can be configured from the API", async
   const source = await readFile(join(state.directory, ".env"), "utf8");
   assert.match(source, /^AISTUDIO_BROWSER_TIMEOUT_MS=123456$/mu);
   assert.match(source, /^AISTUDIO_ACCOUNT_MAX_RETRIES=7$/mu);
+  assert.match(source, /^AISTUDIO_UPSTREAM_API_KEY="test-upstream-key"$/mu);
   const concurrent = (await state.app.inject({ method: "GET", url: "/config/runtime" })).json().settings as Array<{ key: string; configured: unknown }>;
   assert.equal(concurrent.find((s) => s.key === "browser_timeout_ms")?.configured, 123456);
   assert.equal(concurrent.find((s) => s.key === "account_max_retries")?.configured, 7);

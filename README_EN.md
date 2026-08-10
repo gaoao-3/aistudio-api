@@ -42,7 +42,7 @@ Exposes both the **Gemini-native API** and the **Interactions API** — with mul
 | 💬 | **Interactions API** | `/v1/interactions`, `/v1beta/interactions`, and `/v1beta2/interactions` (create / get / delete / list / cancel), locally emulated `previous_interaction_id` server state, true incremental SSE events |
 | 🖥️ | **Native TypeScript backend** | Fastify, CloakBrowser, BotGuard hooks, wire codec, response parsing, and Interactions state all run in Node.js |
 | 🌐 | **WebUI** | AI Studio-style interface: chat, history, accounts, usage stats; mobile drawer layout |
-| 📡 | **Live model catalog** | Pulls the latest models via AI Studio's internal ListModels RPC; new models appear automatically, built-in list as fallback |
+| 📡 | **Live model catalog** | Optionally pulls the latest models via AI Studio's internal ListModels RPC; without an upstream key, the built-in list is used |
 | 🛠️ | **Tool calling** | Native `functionCall` / `functionResponse` replay with end-to-end `thought_signature` passthrough (required by Gemini 3 multi-turn tool use) |
 | 🧠 | **Thinking** | Thought steps / `thought_summary` streaming deltas, `total_thought_tokens` accounting |
 | 🖼️ | **Multimodal** | The Chat page reads images, audio, video, PDF, text, and code files; the native API accepts `inlineData` and existing Google Files `fileData` |
@@ -145,7 +145,7 @@ curl http://localhost:3006/v1beta/models/gemini-3-flash-preview:generateContent 
     "tools": [{"googleSearchRetrieval": {}}]
   }'
 
-# Model list (fetched live)
+# Model list (live when AISTUDIO_UPSTREAM_API_KEY is configured; built-in fallback otherwise)
 curl http://localhost:3006/v1beta/models -H "Authorization: Bearer your-secret-token"
 ```
 
@@ -186,7 +186,7 @@ Via environment variables or a `.env` file (see `.env.example`). Common options:
 | `AISTUDIO_PROXY_URL` | system proxy | Browser proxy URL |
 | `AISTUDIO_RUNTIME_ROOT` | project root | Runtime directory containing accounts, keys, interactions, and stats |
 | `AISTUDIO_AUTH_FILE` | active account | Playwright storage state used by CloakBrowser |
-| `AISTUDIO_UPSTREAM_API_KEY` | empty | Real Gemini API key required for Embedding |
+| `AISTUDIO_UPSTREAM_API_KEY` | empty | Optional for live model discovery; a real Gemini API key is required for Embedding |
 | `AISTUDIO_INTERACTIONS_DIR` | `data/interactions` | Interaction state directory |
 | `AISTUDIO_INTERACTIONS_TTL_SECONDS` | `604800` | Interaction retention; `0` keeps forever |
 | `AISTUDIO_ACCOUNT_ROTATION_MODE` | `round_robin` | Account rotation mode: `round_robin` / `lru` / `least_rl` |
