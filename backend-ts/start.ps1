@@ -1,6 +1,6 @@
 param(
     [string]$RuntimeRoot = "",
-    [int]$Port = 8000,
+    [int]$Port = 3006,
     [switch]$SkipBuild
 )
 
