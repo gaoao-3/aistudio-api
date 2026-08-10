@@ -6,7 +6,7 @@ import { parse, stringify } from "yaml";
 import { ApiKeyStore } from "./auth/api-key-store.js";
 import { BridgeError, type BackendBridge } from "./bridge/backend-bridge.js";
 import { NativeBackendBridge } from "./bridge/native-bridge.js";
-import { normalizeBodyLimit, RuntimeConfigStore } from "./config/runtime-config.js";
+import { RuntimeConfigStore } from "./config/runtime-config.js";
 import { settings } from "./config.js";
 import { HttpError, errorDetail } from "./http/errors.js";
 import { InteractionStore } from "./interactions/store.js";
@@ -190,10 +190,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   app.get("/config/runtime", async () => runtimeConfig.read());
   app.put("/config/runtime", async (request) => {
-    const body = bodyRecord(request.body);
     try {
-      const view = await runtimeConfig.saveBodyLimit(normalizeBodyLimit(body.body_limit_bytes));
-      return { ok: true, body_limit_bytes: view.configured_body_limit_bytes, ...view };
+      const view = await runtimeConfig.save(bodyRecord(request.body));
+      return { ok: true, ...view };
     } catch (error) {
       if (error instanceof TypeError || error instanceof RangeError) throw new HttpError(422, error.message);
       throw error;
@@ -319,21 +318,27 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   }
 
-  async function availableModels(): Promise<Record<string, unknown>[]> {
+  async function availableModels(): Promise<{
+    readonly models: Record<string, unknown>[];
+    readonly source: "live" | "fallback";
+  }> {
     try {
       const models = await bridge.request<unknown>("models");
-      if (Array.isArray(models) && models.length > 0) return models.filter(isRecord);
+      if (Array.isArray(models)) {
+        const validModels = models.filter(isRecord);
+        if (validModels.length > 0) return { models: validModels, source: "live" };
+      }
     } catch (error) {
-      app.log.warn({ error }, "读取 AI Studio 模型目录失败，使用内置目录");
+      app.log.warn({ err: error }, "读取 AI Studio 模型目录失败，使用内置目录");
     }
-    return FALLBACK_MODELS.map(modelCard);
+    return { models: FALLBACK_MODELS.map(modelCard), source: "fallback" };
   }
 
-  app.get("/v1beta/models", async () => ({ models: await availableModels() }));
+  app.get("/v1beta/models", async () => availableModels());
   app.get<{ Params: { "*": string } }>("/v1beta/models/*", async (request) => {
     const id = request.params["*"].replace(/^models\//u, "");
     const name = `models/${id}`;
-    const model = (await availableModels()).find((item) => item.name === name);
+    const model = (await availableModels()).models.find((item) => item.name === name);
     if (!model) throw new HttpError(404, errorDetail(`Model '${id}' not found`, "not_found"));
     return model;
   });

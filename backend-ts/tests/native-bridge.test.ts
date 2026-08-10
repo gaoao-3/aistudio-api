@@ -152,7 +152,12 @@ describe("native Interactions bridge", () => {
         candidates: [{ content: { parts: [{ text: "晴，28°C" }] } }],
         usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 4, thoughtsTokenCount: 0, totalTokenCount: 12 },
       });
-      const bridge = new NativeBackendBridge(gateway, new InteractionStore(directory, 0), undefined, new StatsStore(join(directory, "stats.json")));
+      const bridge = new NativeBackendBridge(
+        gateway,
+        new InteractionStore(directory, 0),
+        new AccountStore(join(directory, "accounts")),
+        new StatsStore(join(directory, "stats.json")),
+      );
       const first = await bridge.request<Record<string, unknown>>("interaction_create", { body: {
         model: "gemma-4-31b-it",
         input: "上海天气",
@@ -196,7 +201,7 @@ describe("native Interactions bridge", () => {
       const bridge = new NativeBackendBridge(
         new FakeGateway(),
         new InteractionStore(directory, 0),
-        undefined,
+        new AccountStore(join(directory, "accounts")),
         new StatsStore(join(directory, "stats.json")),
         login,
       );

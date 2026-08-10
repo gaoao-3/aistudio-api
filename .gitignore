@@ -20,3 +20,13 @@ chrome-headless
 # 前端构建
 frontend/node_modules/
 node_modules/
+
+# Python 生成物（当前服务实现为 TypeScript）
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/

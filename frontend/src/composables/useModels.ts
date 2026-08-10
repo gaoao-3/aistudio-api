@@ -1,10 +1,13 @@
 // ---------- 模型目录（从 app.ts 的 loadModels/pickDefaultModel 移植） ----------
-import { apiFetch } from '../api/client';
+import { apiFetch, toastErr, toastInfo } from '../api/client';
 import { model, models } from './useCache';
 
 interface ModelsResponse {
   models?: { name?: string }[];
+  source?: 'live' | 'fallback';
 }
+
+let fallbackNoticeShown = false;
 
 export function useModels() {
   function pickDefaultModel(): string {
@@ -17,15 +20,24 @@ export function useModels() {
   async function loadModels(): Promise<void> {
     try {
       const r = await apiFetch('/v1beta/models');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json() as ModelsResponse;
-      models.value = (d.models || [])
+      if (!Array.isArray(d.models) || d.models.length === 0) throw new Error('服务端返回了空模型目录');
+      models.value = d.models
         .map(m => ({ id: (m.name || '').replace('models/', '') }))
         .filter(m => m.id && !/^(antigravity|deep-research)/.test(m.id));
+      if (d.source === 'fallback' && !fallbackNoticeShown) {
+        fallbackNoticeShown = true;
+        toastInfo('实时模型目录不可用，当前使用内置兜底列表');
+      }
       const ids = models.value.map(m => m.id);
       if (!ids.includes(model.value) || /^(antigravity|deep-research)/.test(model.value)) {
         model.value = pickDefaultModel();
       }
-    } catch (e) { /* 目录加载失败时沿用缓存 */ }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      toastErr(`模型目录加载失败，已沿用本地缓存：${detail}`);
+    }
   }
 
   return { models, model, loadModels, pickDefaultModel };

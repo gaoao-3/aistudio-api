@@ -9,8 +9,7 @@ $backendRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Split-Path -Parent $backendRoot
 
 if (-not $RuntimeRoot) {
-    $siblingRuntime = Join-Path (Split-Path -Parent $projectRoot) "aistudio-api"
-    $RuntimeRoot = if (Test-Path (Join-Path $siblingRuntime "data")) { $siblingRuntime } else { $projectRoot }
+    $RuntimeRoot = $projectRoot
 }
 $RuntimeRoot = (Resolve-Path $RuntimeRoot).Path
 

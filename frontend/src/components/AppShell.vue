@@ -1,14 +1,14 @@
 <script setup lang="ts">
 // 应用壳：左侧 rail 导航 + 顶栏 + 视图切换
-import { onMounted, ref } from 'vue';
+import { defineAsyncComponent, onMounted, ref } from 'vue';
 import Icon from './Icon.vue';
 import ThemeSwitcher from './ThemeSwitcher.vue';
-import ChatView from '../views/ChatView.vue';
-import HistoryView from '../views/HistoryView.vue';
-import AccountsView from '../views/AccountsView.vue';
-import KeysView from '../views/KeysView.vue';
-import DashboardView from '../views/DashboardView.vue';
-import SettingsView from '../views/SettingsView.vue';
+const ChatView = defineAsyncComponent(() => import('../views/ChatView.vue'));
+const HistoryView = defineAsyncComponent(() => import('../views/HistoryView.vue'));
+const AccountsView = defineAsyncComponent(() => import('../views/AccountsView.vue'));
+const KeysView = defineAsyncComponent(() => import('../views/KeysView.vue'));
+const DashboardView = defineAsyncComponent(() => import('../views/DashboardView.vue'));
+const SettingsView = defineAsyncComponent(() => import('../views/SettingsView.vue'));
 import { useView, VIEW_TITLES, type ViewKey } from '../composables/useView';
 import { useAuth } from '../composables/useAuth';
 import { useAccounts } from '../composables/useAccounts';

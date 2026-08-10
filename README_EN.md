@@ -166,7 +166,7 @@ Features the AI Studio web app does not have fail fast with a 400 instead of sil
 | 💬 **Chat** | streaming, collapsible thinking, multimedia/file upload, image generation, tool-call cards, run settings (temperature / top-p / thinking level / search / safety) |
 | 🕘 **History** | stored interactions; click to load and continue, deletable |
 | 👤 **Accounts** | multi-account login, request-level rotation, rate-limit cooldown, activate/delete, profile and tier refresh |
-| ⚙️ **Service settings** | Adjust the API request body limit in MiB and show whether a restart is required |
+| ⚙️ **Service settings** | Adjust request size, browser/login timeouts, Interaction retention, account throttling, and proxy settings, with restart status |
 | 📊 **Stats** | per-model requests, rate limits, token usage |
 
 ## 🔧 Configuration
@@ -197,7 +197,7 @@ Via environment variables or a `.env` file (see `.env.example`). Common options:
 > [!NOTE]
 > Per-model defaults (thinking, safety, default tools, ...) live in `config.yaml`.
 >
-> The WebUI service settings page reads `GET /config/runtime` and saves `body_limit_bytes` with `PUT /config/runtime`. The value is written to the runtime `.env`; an already running Fastify process keeps its current parser limit, so the UI clearly reports when a restart is required.
+> The WebUI service settings page reads and writes the runtime settings through `GET/PUT /config/runtime`. Values are persisted to the runtime `.env`; an already running Fastify process keeps the values loaded at startup, so settings marked for restart must be followed by a service restart.
 
 ## 🧱 Architecture
 

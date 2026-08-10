@@ -97,16 +97,16 @@ pnpm start:fast
 
 账号、Cookie、API 密钥、统计、Interactions 和 `.env` 默认保存在项目目录下的 `data/` 和配置文件中。
 
-`backend-ts/start.ps1` 如果发现项目同级存在 `aistudio-api/data`，会优先把它作为运行目录。为了避免多份数据混用，建议显式指定：
+`backend-ts/start.ps1` 默认使用当前项目的 `data/` 作为运行目录；如需外置数据目录，可显式指定：
 
 ```powershell
-powershell -File backend-ts/start.ps1 -RuntimeRoot "D:/path/to/aistudio-api" -Port 3006 -SkipBuild
+powershell -File backend-ts/start.ps1 -RuntimeRoot "D:/path/to/aistudio-api-ts" -Port 3006 -SkipBuild
 ```
 
 也可以在 `.env` 中设置：
 
 ```dotenv
-AISTUDIO_RUNTIME_ROOT=D:/path/to/aistudio-api
+AISTUDIO_RUNTIME_ROOT=D:/path/to/aistudio-api-ts
 ```
 
 > [!WARNING]
@@ -264,7 +264,7 @@ AISTUDIO_UPSTREAM_API_KEY=your-gemini-api-key
 | 👤 **账号** | 本机登录、远程登录、Cookie 导入、激活/删除、多账号轮询、昵称头像和会员资料刷新 |
 | 🔑 **API 密钥** | 创建、查看前缀、删除 WebUI API 密钥 |
 | 📊 **统计** | 按模型查看请求数、成功率、限流、错误和 token 用量 |
-| ⚙️ **服务设置** | 调整 API 请求体上限，提示是否需要重启 |
+| ⚙️ **服务设置** | 调整请求体上限、浏览器/登录超时、Interactions 保留、账号限流和代理等运行参数，并提示是否需要重启 |
 
 ### 📎 WebUI 附件说明
 
@@ -334,7 +334,7 @@ AISTUDIO_UPSTREAM_API_KEY=your-gemini-api-key
 | `AISTUDIO_ACCOUNT_PROFILE_REFRESH_MS` | `21600000` | 账号资料建议刷新间隔 |
 
 > [!NOTE]
-> 模型级默认工具、思考和生图参数见根目录的 `config.yaml`。WebUI 的服务设置会把新的请求体上限写入运行目录 `.env`，已经运行的进程需要重启后才会生效。
+> 模型级默认工具、思考和生图参数见根目录的 `config.yaml`。WebUI 的服务设置会把运行参数写入运行目录 `.env`；已经运行的进程继续使用启动时读取的值，标记为重启生效的配置需要重启服务。
 
 ## ⚠️ 能力边界
 

@@ -14,9 +14,9 @@ pnpm install
 .\start.ps1 -Port 3006
 ```
 
-`start.ps1` automatically reuses the sibling `aistudio-api/data` runtime when
-it exists. Override that location with `-RuntimeRoot` or the
-`AISTUDIO_RUNTIME_ROOT` environment variable.
+`start.ps1` uses this project's `data/` directory by default. Override that
+location with `-RuntimeRoot` or the `AISTUDIO_RUNTIME_ROOT` environment
+variable when an external runtime directory is intentional.
 
 ## Verification
 

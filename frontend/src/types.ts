@@ -143,28 +143,49 @@ export interface RemoteLoginState {
   timer: ReturnType<typeof setTimeout> | null;
 }
 
-/** 服务设置页「请求体大小限制」状态（数值均为 MiB） */
-export interface RuntimeConfigState {
-  loading: boolean;
+/** 服务设置页单个运行参数（后端 schema + 当前值，数值单位由 type 决定：mib 为 MiB） */
+export interface RuntimeSetting {
+  key: string;
+  env: string;
+  label: string;
+  description: string;
+  type: 'mib' | 'integer' | 'boolean' | 'enum' | 'string';
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  options?: Array<{ value: string | number | boolean; label: string }>;
+  default: string | number | boolean;
+  effective: string | number | boolean;
+  configured: string | number | boolean | null;
+  sensitive?: boolean;
+  restart_required: boolean;
+}
+
+/** 服务设置页配置项输入状态（每卡一个） */
+export interface RuntimeSettingInput extends RuntimeSetting {
+  input: string | number | boolean | null;
   saving: boolean;
-  loaded: boolean;
   error: string;
   notice: string;
-  restartRequired: boolean;
-  inputMiB: number | null;
-  configuredMiB: number | null;
-  effectiveMiB: number;
-  maxMiB: number;
+}
+
+/** 服务设置页状态 */
+export interface RuntimeConfigState {
+  loading: boolean;
+  loaded: boolean;
+  globalError: string;
+  settings: RuntimeSettingInput[];
 }
 
 /** GET/PUT /config/runtime 响应 */
 export interface RuntimeConfigResponse {
+  settings?: RuntimeSetting[];
   effective_body_limit_bytes?: number;
   configured_body_limit_bytes?: number | null;
   body_limit_max_bytes?: number;
   restart_required?: boolean;
   ok?: boolean;
-  body_limit_bytes?: number;
   detail?: unknown;
 }
 

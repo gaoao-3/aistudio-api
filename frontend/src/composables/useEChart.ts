@@ -1,12 +1,6 @@
-// ---------- ECharts 封装（按需引入，颜色走 CSS 变量，主题切换自动刷新） ----------
+// ---------- ECharts 封装（Dashboard 挂载时动态加载，颜色走 CSS 变量） ----------
 import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
-import * as echarts from 'echarts/core';
-import { BarChart, LineChart, PieChart } from 'echarts/charts';
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
-import type { EChartsCoreOption } from 'echarts/core';
-
-echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+import type { ECharts, EChartsCoreOption } from 'echarts/core';
 
 /** 读取 CSS 变量当前值（主题色切换后即变） */
 export function cssVar(name: string, fallback = ''): string {
@@ -20,20 +14,27 @@ export function cssVar(name: string, fallback = ''): string {
  */
 export function useEChart(getOption: () => EChartsCoreOption) {
   const el = ref<HTMLElement | null>(null);
-  let chart: echarts.ECharts | null = null;
+  let chart: ECharts | null = null;
   let ro: ResizeObserver | null = null;
+  let stopWatch: (() => void) | null = null;
+  let disposed = false;
 
-  onMounted(() => {
+  onMounted(async () => {
     if (!el.value) return;
+    const { default: echarts } = await import('./echarts-runtime');
+    if (disposed || !el.value) return;
     chart = echarts.init(el.value);
     ro = new ResizeObserver(() => chart?.resize());
     ro.observe(el.value);
-    watchEffect(() => {
+    stopWatch = watchEffect(() => {
       chart?.setOption(getOption(), true);
     });
   });
 
   onBeforeUnmount(() => {
+    disposed = true;
+    stopWatch?.();
+    stopWatch = null;
     ro?.disconnect();
     chart?.dispose();
     chart = null;

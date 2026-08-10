@@ -1,13 +1,23 @@
 <script setup lang="ts">
 // 单条消息的 markdown 渲染 + 代码块点击复制（事件委托）
-import { computed } from 'vue';
+import { onBeforeUnmount, ref, watch } from 'vue';
 import { useClipboard } from '@vueuse/core';
 import { renderMarkdown } from '../composables/useMarkdown';
 import { toastErr, toastOk } from '../api/client';
 
 const props = defineProps<{ text: string }>();
 
-const html = computed(() => renderMarkdown(props.text));
+const html = ref('');
+let renderVersion = 0;
+
+watch(() => props.text, async (text) => {
+  const version = ++renderVersion;
+  const rendered = renderMarkdown(text);
+  const nextHtml = typeof rendered === 'string' ? rendered : await rendered;
+  if (version === renderVersion) html.value = nextHtml;
+}, { immediate: true });
+
+onBeforeUnmount(() => { renderVersion += 1; });
 
 async function onClick(e: MouseEvent): Promise<void> {
   const pre = (e.target as Element).closest('pre.codeblock');

@@ -3,6 +3,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 
+// AI Studio Web 使用的公开、服务受限浏览器 key。它只作为模型目录发现的
+// 默认 consumer identity；需要用户自有 key 的能力仍由 upstreamApiKeyExplicit 拦截。
+const DEFAULT_UPSTREAM_API_KEY = "AIzaSyDdP816MREB3SkjZO04QXbjsigfcI0GWOs";
+
 function findProjectRoot(start: string): string {
   let current = resolve(start);
   for (;;) {
@@ -33,6 +37,11 @@ function boolEnv(name: string, fallback: boolean): boolean {
   return !["0", "false", "no", "off"].includes(raw);
 }
 
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
 function envKeys(): Set<string> {
   const keys = new Set<string>();
   for (const name of ["AISTUDIO_API_KEY", "AISTUDIO_API_KEYS"]) {
@@ -58,8 +67,8 @@ export const settings = {
   loginTimeoutMs: intEnv("AISTUDIO_LOGIN_TIMEOUT_MS", 10 * 60 * 1000),
   loginSessionRetentionMs: intEnv("AISTUDIO_LOGIN_SESSION_RETENTION_MS", 10 * 60 * 1000),
   authFile: process.env.AISTUDIO_AUTH_FILE ? resolve(process.env.AISTUDIO_AUTH_FILE) : undefined,
-  proxyUrl: process.env.AISTUDIO_PROXY_URL ?? process.env.HTTPS_PROXY ?? process.env.HTTP_PROXY,
-  upstreamApiKey: process.env.AISTUDIO_UPSTREAM_API_KEY ?? "",
+  proxyUrl: optionalEnv("AISTUDIO_PROXY_URL") ?? optionalEnv("HTTPS_PROXY") ?? optionalEnv("HTTP_PROXY"),
+  upstreamApiKey: process.env.AISTUDIO_UPSTREAM_API_KEY?.trim() || DEFAULT_UPSTREAM_API_KEY,
   upstreamApiKeyExplicit: Boolean(process.env.AISTUDIO_UPSTREAM_API_KEY?.trim()),
   embeddingBaseUrl: (process.env.AISTUDIO_EMBEDDING_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/u, ""),
   staticDir: join(projectRoot, "static"),

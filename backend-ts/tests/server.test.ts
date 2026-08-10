@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -14,6 +14,8 @@ import { InteractionStore } from "../src/interactions/store.js";
 class MockBridge implements BackendBridge {
   readonly calls: Array<{ method: string; params: Readonly<Record<string, unknown>> }> = [];
 
+  constructor(private readonly modelCatalog: readonly Record<string, unknown>[] = []) {}
+
   async start(): Promise<void> {}
   async stop(): Promise<void> {}
   status(): Readonly<{ running: boolean; pid?: number }> { return { running: true, pid: 1234 }; }
@@ -27,7 +29,7 @@ class MockBridge implements BackendBridge {
     this.calls.push({ method, params });
     if (method === "health") return { status: "ok", busy: false } as T;
     if (method === "stats") return { models: {}, totals: { requests: 0 } } as T;
-    if (method === "models") return [] as T;
+    if (method === "models") return this.modelCatalog as T;
     if (method === "generate") return { candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] } as T;
     if (method === "interaction_create") {
       if (onChunk) onChunk("data: [DONE]\n\n");
@@ -61,9 +63,8 @@ class AbortBridge extends MockBridge {
   }
 }
 
-async function fixture() {
+async function fixture(bridge = new MockBridge()) {
   const directory = await mkdtemp(join(tmpdir(), "aistudio-fastify-"));
-  const bridge = new MockBridge();
   const apiKeys = new ApiKeyStore(join(directory, "apikeys.json"));
   const interactions = new InteractionStore(join(directory, "interactions"), 0);
   const app = await buildApp({
@@ -117,12 +118,34 @@ test("system status identifies Fastify and the native backend", async (t) => {
   assert.deepEqual(response.json().bridge, { running: true, pid: 1234 });
 });
 
-test("runtime body limit can be configured from the API", async (t) => {
+test("model catalog reports whether it came from AI Studio or the fallback", async (t) => {
+  const liveBridge = new MockBridge([{ name: "models/gemini-3.6-flash", displayName: "Gemini 3.6 Flash" }]);
+  const live = await fixture(liveBridge);
+  t.after(async () => { await live.app.close(); await rm(live.directory, { recursive: true, force: true }); });
+  const liveResponse = await live.app.inject({ method: "GET", url: "/v1beta/models" });
+  assert.equal(liveResponse.statusCode, 200);
+  assert.equal(liveResponse.json().source, "live");
+  assert.equal(liveResponse.json().models[0].name, "models/gemini-3.6-flash");
+
+  const fallback = await fixture();
+  t.after(async () => { await fallback.app.close(); await rm(fallback.directory, { recursive: true, force: true }); });
+  const fallbackResponse = await fallback.app.inject({ method: "GET", url: "/v1beta/models" });
+  assert.equal(fallbackResponse.statusCode, 200);
+  assert.equal(fallbackResponse.json().source, "fallback");
+  assert.ok(fallbackResponse.json().models.length > 0);
+});
+
+test("runtime config exposes settings and can be configured from the API", async (t) => {
   const state = await fixture();
   t.after(async () => { await state.app.close(); await rm(state.directory, { recursive: true, force: true }); });
   const initial = await state.app.inject({ method: "GET", url: "/config/runtime" });
   assert.equal(initial.statusCode, 200);
   const initialPayload = initial.json();
+  assert.ok(Array.isArray(initialPayload.settings));
+  const body = initialPayload.settings.find((s: { key: string }) => s.key === "body_limit_bytes");
+  assert.ok(body);
+  assert.equal(body.restart_required, false);
+  assert.equal(body.configured, null);
   assert.equal(initialPayload.effective_body_limit_bytes, initialPayload.configured_body_limit_bytes);
   assert.equal(initialPayload.restart_required, false);
 
@@ -137,9 +160,69 @@ test("runtime body limit can be configured from the API", async (t) => {
   assert.equal(saved.json().restart_required, true);
 
   const reread = await state.app.inject({ method: "GET", url: "/config/runtime" });
-  assert.equal(reread.json().configured_body_limit_bytes, 64 * 1024 * 1024);
+  const rereadBody = reread.json().settings.find((s: { key: string }) => s.key === "body_limit_bytes");
+  assert.equal(rereadBody.configured, 64);
+  assert.equal(rereadBody.restart_required, true);
+
+  // 布尔配置项
+  const savedHeadless = await state.app.inject({
+    method: "PUT",
+    url: "/config/runtime",
+    payload: { browser_headless: false },
+  });
+  assert.equal(savedHeadless.statusCode, 200);
+  const headless = (await state.app.inject({ method: "GET", url: "/config/runtime" }))
+    .json().settings.find((s: { key: string }) => s.key === "browser_headless");
+  assert.equal(headless.configured, false);
+  assert.equal(headless.effective, true);
+  assert.equal(headless.restart_required, true);
+
+  // 并发保存必须合并到同一个 .env，不能互相覆盖或产生半截文件。
+  const [savedTimeout, savedRetries] = await Promise.all([
+    state.app.inject({ method: "PUT", url: "/config/runtime", payload: { browser_timeout_ms: 123456 } }),
+    state.app.inject({ method: "PUT", url: "/config/runtime", payload: { account_max_retries: 7 } }),
+  ]);
+  assert.equal(savedTimeout.statusCode, 200);
+  assert.equal(savedRetries.statusCode, 200);
+  const source = await readFile(join(state.directory, ".env"), "utf8");
+  assert.match(source, /^AISTUDIO_BROWSER_TIMEOUT_MS=123456$/mu);
+  assert.match(source, /^AISTUDIO_ACCOUNT_MAX_RETRIES=7$/mu);
+  const concurrent = (await state.app.inject({ method: "GET", url: "/config/runtime" })).json().settings as Array<{ key: string; configured: unknown }>;
+  assert.equal(concurrent.find((s) => s.key === "browser_timeout_ms")?.configured, 123456);
+  assert.equal(concurrent.find((s) => s.key === "account_max_retries")?.configured, 7);
+
+  const savedProxy = await state.app.inject({
+    method: "PUT",
+    url: "/config/runtime",
+    payload: { proxy_url: "http://alice:super-secret@example.test:8080" },
+  });
+  assert.equal(savedProxy.statusCode, 200);
+  const proxy = (await state.app.inject({ method: "GET", url: "/config/runtime" }))
+    .json().settings.find((s: { key: string }) => s.key === "proxy_url");
+  assert.equal(proxy.sensitive, true);
+  assert.match(proxy.configured, /^http:\/\/\*\*\*:\*\*\*@example\.test:8080$/u);
+  assert.doesNotMatch(proxy.configured, /super-secret/u);
+  assert.doesNotMatch(proxy.configured, /alice/u);
+
+  const clearedProxy = await state.app.inject({
+    method: "PUT",
+    url: "/config/runtime",
+    payload: { proxy_url: "" },
+  });
+  assert.equal(clearedProxy.statusCode, 200);
+  const clearedProxyView = (await state.app.inject({ method: "GET", url: "/config/runtime" }))
+    .json().settings.find((s: { key: string }) => s.key === "proxy_url");
+  assert.equal(clearedProxyView.configured, null);
+  assert.equal(clearedProxyView.restart_required, false);
+
+  // 非法值
   assert.equal((await state.app.inject({ method: "PUT", url: "/config/runtime", payload: { body_limit_bytes: 512 } })).statusCode, 422);
   assert.equal((await state.app.inject({ method: "PUT", url: "/config/runtime", payload: { body_limit_bytes: "64MiB" } })).statusCode, 422);
+  assert.equal((await state.app.inject({ method: "PUT", url: "/config/runtime", payload: { browser_timeout_ms: -1 } })).statusCode, 422);
+  assert.equal((await state.app.inject({ method: "PUT", url: "/config/runtime", payload: { browser_timeout_ms: 1000.5 } })).statusCode, 422);
+  assert.equal((await state.app.inject({ method: "PUT", url: "/config/runtime", payload: { body_limit_bytes: 1024.5 } })).statusCode, 422);
+  assert.equal((await state.app.inject({ method: "PUT", url: "/config/runtime", payload: { unknown_setting: 1 } })).statusCode, 422);
+  assert.equal((await state.app.inject({ method: "PUT", url: "/config/runtime", payload: {} })).statusCode, 422);
 });
 
 test("creating the first API key enables authentication immediately", async (t) => {
