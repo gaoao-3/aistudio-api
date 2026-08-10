@@ -20,7 +20,7 @@
     "yaml": "^2.8.0"
   },
   "devDependencies": {
-    "@types/node": "^22.15.0",
+    "@types/node": "^26.1.2",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
