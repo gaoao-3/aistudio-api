@@ -30,7 +30,7 @@ pnpm run build
 pnpm start:fast
 ```
 
-Open `http://localhost:48370`:
+Open `http://localhost:8000`:
 
 1. Go to the **Accounts** page
 2. Sign in through a local browser, use remote assisted login, or import Google cookies
@@ -50,13 +50,13 @@ guide. The examples below use the migration-guide path.
 
 ```bash
 # Basic chat
-curl http://localhost:48370/v1beta2/interactions \
+curl http://localhost:8000/v1beta2/interactions \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
   -d '{"model": "gemini-3-flash-preview", "input": "Hello!"}'
 
 # Streaming
-curl http://localhost:48370/v1beta2/interactions \
+curl http://localhost:8000/v1beta2/interactions \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -66,7 +66,7 @@ curl http://localhost:48370/v1beta2/interactions \
   }'
 
 # Multi-turn with server-side state (emulated locally)
-curl http://localhost:48370/v1beta2/interactions \
+curl http://localhost:8000/v1beta2/interactions \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -82,14 +82,14 @@ Official SDK:
 from google import genai
 
 client = genai.Client(api_key="your-secret-token",
-                      http_options={"base_url": "http://localhost:48370"})
+                      http_options={"base_url": "http://localhost:8000"})
 r = client.interactions.create(model="gemini-3-flash-preview", input="Hello")
 ```
 
 ### Gemini-native API
 
 ```bash
-curl http://localhost:48370/v1beta/models/gemini-3-flash-preview:generateContent \
+curl http://localhost:8000/v1beta/models/gemini-3-flash-preview:generateContent \
   -H "Authorization: Bearer your-secret-token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -98,7 +98,7 @@ curl http://localhost:48370/v1beta/models/gemini-3-flash-preview:generateContent
   }'
 
 # Model list (fetched live)
-curl http://localhost:48370/v1beta/models -H "Authorization: Bearer your-secret-token"
+curl http://localhost:8000/v1beta/models -H "Authorization: Bearer your-secret-token"
 ```
 
 ### Capability boundaries
@@ -127,7 +127,7 @@ Via environment variables or a `.env` file (see `.env.example`). Common options:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AISTUDIO_PORT` | `48370` | API port |
+| `AISTUDIO_PORT` | `8000` | API port |
 | `AISTUDIO_HOST` | `0.0.0.0` | Listen address |
 | `AISTUDIO_API_KEY` | empty | Enables auth when set |
 | `AISTUDIO_BROWSER_HEADLESS` | `true` | Run CloakBrowser headlessly |

@@ -51,7 +51,7 @@ function rotationModeEnv(): "round_robin" | "lru" | "least_rl" {
 
 export const settings = {
   host: process.env.AISTUDIO_HOST ?? "0.0.0.0",
-  port: intEnv("AISTUDIO_PORT", 48370),
+  port: intEnv("AISTUDIO_PORT", 8000),
   browserHeadless: boolEnv("AISTUDIO_BROWSER_HEADLESS", true),
   browserTimeoutMs: intEnv("AISTUDIO_BROWSER_TIMEOUT_MS", 120_000),
   bodyLimitBytes: Math.max(1_024, intEnv("AISTUDIO_API_BODY_LIMIT_BYTES", 32 * 1024 * 1024)),

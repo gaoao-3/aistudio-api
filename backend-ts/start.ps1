@@ -1,6 +1,6 @@
 param(
     [string]$RuntimeRoot = "",
-    [int]$Port = 48370,
+    [int]$Port = 8000,
     [switch]$SkipBuild
 )
 
@@ -39,4 +39,3 @@ try {
 } finally {
     Pop-Location
 }
-

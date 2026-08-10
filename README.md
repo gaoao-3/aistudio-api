@@ -46,14 +46,14 @@ pnpm run setup
 # 构建前端静态资源和 TypeScript 后端
 pnpm run build
 
-# 启动服务，默认监听 0.0.0.0:48370
+# 启动服务，默认监听 0.0.0.0:8000
 pnpm start:fast
 ~~~
 
 启动后访问：
 
 ~~~text
-http://localhost:48370/
+http://localhost:8000/
 ~~~
 
 首次使用建议按以下顺序操作：
@@ -71,7 +71,7 @@ http://localhost:48370/
 backend-ts/start.ps1 如果发现项目同级存在 aistudio-api/data，会优先把它作为运行目录。为了避免多份数据混用，建议显式指定：
 
 ~~~powershell
-powershell -File backend-ts/start.ps1 -RuntimeRoot "D:/path/to/aistudio-api" -Port 48370 -SkipBuild
+powershell -File backend-ts/start.ps1 -RuntimeRoot "D:/path/to/aistudio-api" -Port 8000 -SkipBuild
 ~~~
 
 也可以在 .env 中设置：
@@ -162,7 +162,7 @@ from google import genai
 
 client = genai.Client(
     api_key="your-secret-token",
-    http_options={"base_url": "http://localhost:48370"},
+    http_options={"base_url": "http://localhost:8000"},
 )
 result = client.interactions.create(
     model="gemini-3-flash-preview",
@@ -261,7 +261,7 @@ AISTUDIO_UPSTREAM_API_KEY=your-gemini-api-key
 | AISTUDIO_PROJECT_ROOT | 自动查找 | 项目根目录 |
 | AISTUDIO_RUNTIME_ROOT | 项目目录 | 账号、状态、统计和 .env 所在运行目录 |
 | AISTUDIO_HOST | 0.0.0.0 | 监听地址 |
-| AISTUDIO_PORT | 48370 | 服务端口 |
+| AISTUDIO_PORT | 8000 | 服务端口 |
 | AISTUDIO_API_KEY / AISTUDIO_API_KEYS | 空 | 一个或多个 HTTP API Key |
 | AISTUDIO_APIKEYS_FILE | data/apikeys.json | WebUI 创建的密钥存储文件 |
 | AISTUDIO_BROWSER_HEADLESS | true | 是否无头运行 CloakBrowser |
