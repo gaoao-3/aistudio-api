@@ -1,0 +1,29 @@
+{
+  "name": "aistudi-web-api-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/katex": "^0.16.8",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "typescript": "^5.6.0",
+    "unocss": "^66.7.5",
+    "vite": "^5.4.0",
+    "vue-tsc": "^3.3.9"
+  },
+  "dependencies": {
+    "@vueuse/core": "^14.4.0",
+    "dompurify": "^3.4.13",
+    "echarts": "^6.1.0",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.18.1",
+    "marked": "^18.0.9",
+    "naive-ui": "^2.44.1",
+    "vue": "^3.5.41"
+  }
+}

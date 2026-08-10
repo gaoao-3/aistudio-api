@@ -1,0 +1,192 @@
+interface ParsedPart {
+  readonly text: string;
+  readonly thought: boolean;
+  readonly inlineData?: readonly [string, string];
+  readonly functionCall?: Record<string, unknown>;
+  readonly functionResponse?: Record<string, unknown>;
+  readonly thoughtSignature?: string;
+}
+
+export interface ParsedCandidate {
+  text: string;
+  thinking: string;
+  parts: Record<string, unknown>[];
+  finishReason?: number;
+  safetyRatings?: unknown[];
+}
+
+export interface ParsedAIStudioResponse {
+  readonly candidate: ParsedCandidate;
+  readonly responseId: string;
+  readonly usage: {
+    readonly promptTokens: number;
+    readonly visibleTokens: number;
+    readonly reasoningTokens: number;
+    readonly completionTokens: number;
+    readonly totalTokens: number;
+  };
+}
+
+function isIntegerLike(value: unknown): value is number | string {
+  if (typeof value === "number") return Number.isInteger(value);
+  return typeof value === "string" && /^[+-]?\d+$/u.test(value.trim());
+}
+
+function integer(value: unknown): number {
+  return isIntegerLike(value) ? Number(value) : 0;
+}
+
+function decodeWireValue(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  if (value.length >= 2 && value[0] == null && Array.isArray(value[1])) return decodeArgumentPairs(value[1]);
+  if (value.length >= 3 && value[0] == null && value[1] == null) {
+    return Array.isArray(value[2]) ? value[2].map(decodeWireValue) : value[2];
+  }
+  return decodeArgumentPairs(value);
+}
+
+function decodeArgumentPairs(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  if (value.every(item => Array.isArray(item) && item.length >= 2 && typeof item[0] === "string")) {
+    return Object.fromEntries(value.map(item => [item[0] as string, decodeWireValue(item[1])]));
+  }
+  if (value.length === 1 && Array.isArray(value[0])) return decodeArgumentPairs(value[0]);
+  return value.map(decodeWireValue);
+}
+
+function functionPayload(value: unknown, type: "functionCall" | "functionResponse"): Record<string, unknown> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const payload: Record<string, unknown> = { type, raw: value };
+  if (typeof value[0] === "string") payload.name = value[0];
+  if (value.length > 1) {
+    const args = value[1];
+    if (typeof args === "string") {
+      try { payload.args = JSON.parse(args); } catch { payload.arguments = args; }
+    } else if (Array.isArray(args)) payload.args = decodeArgumentPairs(args);
+    else if (args !== undefined) payload.args = args;
+  }
+  if (typeof value[2] === "string") payload.call_id = value[2];
+  return payload;
+}
+
+function parsePart(raw: unknown): ParsedPart {
+  if (!Array.isArray(raw)) return { text: "", thought: false };
+  const thought = typeof raw[10] === "boolean" ? raw[10] : typeof raw[0] === "boolean" ? raw[0] : raw[12] === 1;
+  const signature = typeof raw[14] === "string" ? raw[14] : undefined;
+  const call = functionPayload(raw[10] ?? raw[3], "functionCall");
+  if (call && signature) call.thought_signature = signature;
+  return {
+    text: typeof raw[1] === "string" ? raw[1] : "",
+    thought,
+    ...(Array.isArray(raw[2]) && typeof raw[2][0] === "string" && typeof raw[2][1] === "string"
+      ? { inlineData: [raw[2][0], raw[2][1]] as const }
+      : {}),
+    ...(call ? { functionCall: call } : {}),
+    ...(functionPayload(raw[11] ?? raw[4], "functionResponse") ? { functionResponse: functionPayload(raw[11] ?? raw[4], "functionResponse")! } : {}),
+    ...(signature ? { thoughtSignature: signature } : {}),
+  };
+}
+
+function looksLikeChunk(value: unknown): value is unknown[] {
+  return Array.isArray(value) && value.length > 0 && Array.isArray(value[0]);
+}
+
+function responseChunks(outer: unknown): unknown[][] {
+  if (Array.isArray(outer) && outer.length > 0) {
+    if (outer.length === 1 && Array.isArray(outer[0])) {
+      const nested = outer[0].filter(looksLikeChunk);
+      if (nested.length > 0) return nested;
+    }
+    const top = outer.filter(looksLikeChunk);
+    if (top.length > 1) return top;
+  }
+  return looksLikeChunk(outer) ? [outer] : [];
+}
+
+function parseOuter(raw: string): unknown {
+  const stripped = raw.trim().replace(/^\)\]\}'\s*/u, "");
+  try { return JSON.parse(stripped); } catch {
+    for (const line of stripped.split(/\r?\n/u)) {
+      try { return JSON.parse(line); } catch { /* continue */ }
+    }
+    throw new Error("AI Studio returned a non-JSON response");
+  }
+}
+
+export function parseAIStudioResponse(raw: string): ParsedAIStudioResponse {
+  const chunks = responseChunks(parseOuter(raw));
+  if (chunks.length === 0) throw new Error("AI Studio response did not contain a candidate chunk");
+  const candidate: ParsedCandidate = { text: "", thinking: "", parts: [] };
+  for (const chunk of chunks) {
+    const first = Array.isArray(chunk[0]) ? chunk[0][0] : undefined;
+    if (!Array.isArray(first)) continue;
+    const content = Array.isArray(first[0]) ? first[0] : undefined;
+    const rawParts = content && Array.isArray(content[0]) ? content[0] : [];
+    for (const rawPart of rawParts) {
+      const part = parsePart(rawPart);
+      if (part.text) {
+        if (part.thought) candidate.thinking += part.text;
+        else candidate.text += part.text;
+      }
+      if (part.inlineData) {
+        candidate.parts.push({
+          inlineData: { mimeType: part.inlineData[0], data: part.inlineData[1] },
+          ...(part.thought ? { thought: true } : {}),
+          ...(part.thoughtSignature ? { thoughtSignature: part.thoughtSignature } : {}),
+        });
+      }
+      if (part.functionCall) {
+        candidate.parts.push({
+          functionCall: {
+            name: part.functionCall.name ?? "unknown",
+            args: part.functionCall.args ?? part.functionCall.arguments ?? {},
+            ...(part.functionCall.call_id ? { id: part.functionCall.call_id } : {}),
+          },
+          ...(part.thoughtSignature ? { thoughtSignature: part.thoughtSignature } : {}),
+        });
+      }
+      if (part.functionResponse) {
+        candidate.parts.push({ functionResponse: { name: part.functionResponse.name ?? "unknown", response: part.functionResponse.args ?? {} } });
+      }
+    }
+    if (typeof first[1] === "number") candidate.finishReason = first[1];
+    if (Array.isArray(first[4])) candidate.safetyRatings = first[4];
+  }
+  if (candidate.thinking) candidate.parts.unshift({ text: candidate.thinking, thought: true });
+  if (candidate.text) candidate.parts.push({ text: candidate.text });
+  if (candidate.parts.length === 0) candidate.parts.push({ text: "" });
+  const last = chunks.at(-1)!;
+  const usage = Array.isArray(last[2]) ? last[2] : [];
+  const promptTokens = integer(usage[0]);
+  const visibleTokens = integer(usage[1]);
+  const reasoningTokens = integer(usage[9]);
+  const completionTokens = visibleTokens + reasoningTokens;
+  return {
+    candidate,
+    responseId: typeof last[7] === "string" ? last[7] : "",
+    usage: {
+      promptTokens,
+      visibleTokens,
+      reasoningTokens,
+      completionTokens,
+      totalTokens: integer(usage[2]) || promptTokens + completionTokens,
+    },
+  };
+}
+
+export function toGeminiResponse(parsed: ParsedAIStudioResponse): Record<string, unknown> {
+  return {
+    candidates: [{
+      content: { role: "model", parts: parsed.candidate.parts },
+      finishReason: parsed.candidate.parts.some(part => "functionCall" in part) ? "FUNCTION_CALL" : "STOP",
+      ...(parsed.candidate.safetyRatings ? { safetyRatings: parsed.candidate.safetyRatings } : {}),
+    }],
+    usageMetadata: {
+      promptTokenCount: parsed.usage.promptTokens,
+      candidatesTokenCount: parsed.usage.visibleTokens,
+      thoughtsTokenCount: parsed.usage.reasoningTokens,
+      totalTokenCount: parsed.usage.totalTokens,
+    },
+    ...(parsed.responseId ? { responseId: parsed.responseId } : {}),
+  };
+}

@@ -1,0 +1,22 @@
+dist/
+build/
+
+/data/
+/tmp/
+stream_response.txt
+.vscode/
+docs/
+.env
+/test_*
+/capture_*
+chromium-profile/
+scripts/
+data2/
+.ai_memory
+.antigravitycli
+chrome-headless
+
+
+# 前端构建
+frontend/node_modules/
+node_modules/

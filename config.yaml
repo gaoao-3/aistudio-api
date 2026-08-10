@@ -1,0 +1,80 @@
+model_defaults:
+  # profiles: 按模型名规则匹配，适合整类模型共用默认配置
+  profiles:
+    # 生图模型默认配置
+    - name: image_models
+      match:
+        contains:
+          - image
+      # 命中后视为生图模型
+      is_image_model: true
+      # 生图模型可选内置工具名：
+      # - google_search                    仅网页搜索
+      # - image_search                     仅图片搜索
+      # - google_search_and_image_search   网页搜索 + 图片搜索
+      default_tools:
+        - google_search_and_image_search
+      # generation_config_defaults 会映射到内部 wire generation_config
+      generation_config_defaults:
+        # 生图通常不需要显式 response mime type
+        response_mime_type: null
+        # image_only 或 text_and_image
+        image_output_mode: image_only
+        # thinking_config 最终会编码成 wire 数组
+        thinking_config:
+          # LOW / MEDIUM / HIGH / MINIMAL
+          level: MINIMAL
+          mode: 1
+      # 某些生图模型不接受这些 generation_config 下标，发请求前会清空
+      clear_generation_config_indexes:
+        - 7
+        - 13
+        - 17
+      # 当前生图模型默认不下发 safety_settings
+      disable_safety_settings: true
+
+    # Gemma 文本模型默认配置
+    - name: gemma_models
+      match:
+        prefixes:
+          - gemma-
+      # Gemma 系列只能选这两个内置工具：
+      # - google_search
+      # - code_execution
+      default_tools:
+        - google_search
+      # safety_settings 取值范围 1..5
+      # 1 = 最严格拦截
+      # 5 = 关闭
+      safety_settings:
+        Harassment: 5
+        Hate: 5
+        Sexually Explicit: 5
+        Dangerous Content: 5
+
+    # Gemini 文本模型默认配置
+    - name: gemini_models
+      match:
+        prefixes:
+          - gemini-
+      # Gemini 系列可选 4 个内置工具：
+      # - google_search
+      # - code_execution
+      # - google_maps
+      # - url_context
+      default_tools:
+        - google_search
+      safety_settings:
+        Harassment: 5
+        Hate: 5
+        Sexually Explicit: 5
+        Dangerous Content: 5
+
+  # models: 对单个模型做精确覆盖，优先级高于上面的 profiles
+  # 例如：
+  # models:
+  #   gemini-3.1-flash-image-preview:
+  #     generation_config_defaults:
+  #       image_output_mode: text_and_image
+  #       media_resolution: HIGH
+  models: {}
