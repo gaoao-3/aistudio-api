@@ -1,39 +1,59 @@
 <div align="center">
 
-# aistudi-web-api
+# ✨ aistudi-web-api
 
-A reverse proxy for the Google AI Studio web playground. Log in with your Google account and serve chat, image generation, web search, tool calling, and thinking chains over the **Gemini-native API** and the **Interactions API**, with Pro/Ultra account support and multi-account rotation.
+**Turn the Google AI Studio web playground into your own callable Gemini API service.**
 
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6?style=flat-square&logo=typescript&logoColor=white)
-![Fastify](https://img.shields.io/badge/Fastify-5-000000?style=flat-square&logo=fastify&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=nodemon&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+Exposes both the **Gemini-native API** and the **Interactions API** — with multimodal input, tool calling, thinking chains, multi-account rotation, and an AI Studio-style WebUI built for desktop and mobile.
 
-[中文](./README.md) · [Features](#features) · [Quick Start](#quick-start) · [API Usage](#api-usage) · [WebUI](#webui) · [Configuration](#configuration) · [Architecture](#architecture)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6?style=for-the-badge&logo=typescript&logoColor=white)
+![Fastify](https://img.shields.io/badge/Fastify-5-000000?style=for-the-badge&logo=fastify&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![pnpm](https://img.shields.io/badge/pnpm-11-F69220?style=for-the-badge&logo=pnpm&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+
+**[中文](./README.md)** · [English](./README_EN.md)
 
 </div>
 
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#api-usage">API Usage</a> ·
+  <a href="#webui">WebUI</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#architecture">Architecture</a>
+</p>
+
 ---
 
-> **About this project** — Fork of [chrysoljq/aistudio-api](https://github.com/chrysoljq/aistudio-api): the OpenAI/Anthropic compatibility layers were removed; this fork adds a native TypeScript gateway, the Interactions API, an AI Studio-style WebUI, and a live model catalog.
+> [!IMPORTANT]
+> This project is **not** an official Google API and is **not** the same as connecting directly with a Gemini API key. Requests are forwarded through TypeScript/Fastify, CloakBrowser, and the AI Studio web session. Only run it with Google accounts and network environments you are authorized to use.
+>
+> Fork of [chrysoljq/aistudio-api](https://github.com/chrysoljq/aistudio-api): the OpenAI/Anthropic compatibility layers were removed; this fork adds a native TypeScript gateway, the Interactions API, an AI Studio-style WebUI, and a live model catalog.
 
-## Features
+---
 
-| Capability | Description |
-|------------|-------------|
-| **Gemini-native API** | `/v1beta/models/{model}:generateContent`, `:streamGenerateContent`, `:embedContent`, `:batchEmbedContents`, `/v1beta/models` |
-| **Interactions API** | `/v1/interactions`, `/v1beta/interactions`, and `/v1beta2/interactions` (create / get / delete / list / cancel), locally emulated `previous_interaction_id` server state, true incremental SSE events |
-| **Native TypeScript backend** | Fastify, CloakBrowser, BotGuard hooks, wire codec, response parsing, and Interactions state all run in Node.js |
-| **WebUI** | AI Studio-style interface: chat, history, accounts, usage stats; mobile drawer layout |
-| **Live model catalog** | Pulls the latest models via AI Studio's internal ListModels RPC; new models appear automatically, built-in list as fallback |
-| **Tool calling** | Native `functionCall` / `functionResponse` replay with end-to-end `thought_signature` passthrough (required by Gemini 3 multi-turn tool use) |
-| **Thinking** | Thought steps / `thought_summary` streaming deltas, `total_thought_tokens` accounting |
-| **Multimodal** | The Chat page reads images, audio, video, PDF, text, and code files; the native API accepts `inlineData` and existing Google Files `fileData` |
-| **Anti-detection** | CloakBrowser fingerprint-evasion Chromium, BotGuard snapshot auto-location via feature matching |
-| **Multi-account management** | Local browser login, remote assisted login, cookie import, request-level round-robin / LRU / least-rate-limited rotation, and automatic cooldown after 429s |
-| **Account profile** | Best-effort sync of nickname, avatar, and Free/Pro/Ultra tier from AI Studio / Google Account pages, with manual refresh and stale-data fallback |
+## ✨ Features
 
-## Quick Start
+|  | Capability | Description |
+|:---:|---|---|
+| ⚡ | **Gemini-native API** | `/v1beta/models/{model}:generateContent`, `:streamGenerateContent`, `:embedContent`, `:batchEmbedContents`, `/v1beta/models` |
+| 💬 | **Interactions API** | `/v1/interactions`, `/v1beta/interactions`, and `/v1beta2/interactions` (create / get / delete / list / cancel), locally emulated `previous_interaction_id` server state, true incremental SSE events |
+| 🖥️ | **Native TypeScript backend** | Fastify, CloakBrowser, BotGuard hooks, wire codec, response parsing, and Interactions state all run in Node.js |
+| 🌐 | **WebUI** | AI Studio-style interface: chat, history, accounts, usage stats; mobile drawer layout |
+| 📡 | **Live model catalog** | Pulls the latest models via AI Studio's internal ListModels RPC; new models appear automatically, built-in list as fallback |
+| 🛠️ | **Tool calling** | Native `functionCall` / `functionResponse` replay with end-to-end `thought_signature` passthrough (required by Gemini 3 multi-turn tool use) |
+| 🧠 | **Thinking** | Thought steps / `thought_summary` streaming deltas, `total_thought_tokens` accounting |
+| 🖼️ | **Multimodal** | The Chat page reads images, audio, video, PDF, text, and code files; the native API accepts `inlineData` and existing Google Files `fileData` |
+| 🛡️ | **Anti-detection** | CloakBrowser fingerprint-evasion Chromium, BotGuard snapshot auto-location via feature matching |
+| 🔁 | **Multi-account management** | Local browser login, remote assisted login, cookie import, request-level round-robin / LRU / least-rate-limited rotation, and automatic cooldown after 429s |
+| 👤 | **Account profile** | Best-effort sync of nickname, avatar, and Free/Pro/Ultra tier from AI Studio / Google Account pages, with manual refresh and stale-data fallback |
+
+## 🚀 Quick Start
+
+<details open>
+<summary><b>Install & start</b></summary>
 
 ```bash
 # 1. Clone the repository
@@ -50,19 +70,27 @@ pnpm run build
 pnpm start:fast
 ```
 
-Open `http://localhost:3006` and follow these steps:
+</details>
 
-1. Go to the **Accounts** page.
-2. Sign in through a local browser, use remote assisted login, or import Google cookies.
-3. Chat in the **Chat** page, or use the API below.
+Open **<http://localhost:3006>** and follow these steps:
 
-> **Note** — Remote assisted login requires API authentication. When the service is not accessed only from localhost, put it behind HTTPS. Passwords and verification codes are forwarded only to the current one-time CloakBrowser session and are not written to logs or account metadata.
+> [!NOTE]
+> **First-time setup:**
+>
+> 1. Go to the **Accounts** page.
+> 2. Sign in through a local browser, use remote assisted login, or import Google cookies.
+> 3. Chat in the **Chat** page, or use the API below.
 
-## API Usage
+> [!WARNING]
+> Remote assisted login requires API authentication. When the service is not accessed only from localhost, put it behind HTTPS. Passwords and verification codes are forwarded only to the current one-time CloakBrowser session and are not written to logs or account metadata.
 
-> **Auth** — Once `AISTUDIO_API_KEY` is set, use `Authorization: Bearer <key>`, `x-api-key`, `x-goog-api-key`, or the `?key=` query parameter. The official google-genai SDK can point its `base_url` at this service directly.
+## 🔑 Authentication
 
-### Interactions API (recommended)
+Once `AISTUDIO_API_KEY` is set, use `Authorization: Bearer <key>`, `x-api-key`, `x-goog-api-key`, or the `?key=` query parameter. The official google-genai SDK can point its `base_url` at this service directly.
+
+## 📚 API Usage
+
+### 💬 Interactions API (recommended)
 
 The service accepts the current official `/v1beta/interactions`, stable `/v1/interactions`, and the `/v1beta2/interactions` path used by the migration guide. The examples below use the migration-guide path.
 
@@ -94,7 +122,7 @@ curl http://localhost:3006/v1beta2/interactions \
   }'
 ```
 
-Official SDK:
+**Official SDK:**
 
 ```python
 from google import genai
@@ -106,7 +134,7 @@ client = genai.Client(
 r = client.interactions.create(model="gemini-3-flash-preview", input="Hello")
 ```
 
-### Gemini-native API
+### ⚡ Gemini-native API
 
 ```bash
 curl http://localhost:3006/v1beta/models/gemini-3-flash-preview:generateContent \
@@ -121,27 +149,27 @@ curl http://localhost:3006/v1beta/models/gemini-3-flash-preview:generateContent 
 curl http://localhost:3006/v1beta/models -H "Authorization: Bearer your-secret-token"
 ```
 
-### Capability boundaries
+### ⚠️ Capability boundaries
 
 Features the AI Studio web app does not have fail fast with a 400 instead of silently degrading:
 
-- `agent` (Deep Research / Antigravity and other managed agents)
-- `background=true` background execution
-- `file_search` tool, audio/video `response_format`
-- arbitrary HTTP file URI fetching and automatic Google Files uploads
-- `seed` and `thinking_summaries` are ignored; `tool_choice` any/validated degrade to auto
+- ❌ `agent` (Deep Research / Antigravity and other managed agents)
+- ❌ `background=true` background execution
+- ❌ `file_search` tool, audio/video `response_format`
+- ❌ arbitrary HTTP file URI fetching and automatic Google Files uploads
+- ⚠️ `seed` and `thinking_summaries` are ignored; `tool_choice` any/validated degrade to auto
 
-## WebUI
+## 🌐 WebUI
 
 | Page | Description |
-|------|-------------|
-| **Chat** | streaming, collapsible thinking, multimedia/file upload, image generation, tool-call cards, run settings (temperature / top-p / thinking level / search / safety) |
-| **History** | stored interactions; click to load and continue, deletable |
-| **Accounts** | multi-account login, request-level rotation, rate-limit cooldown, activate/delete, profile and tier refresh |
-| **Service settings** | Adjust the API request body limit in MiB and show whether a restart is required |
-| **Stats** | per-model requests, rate limits, token usage |
+|:---:|---|
+| 💬 **Chat** | streaming, collapsible thinking, multimedia/file upload, image generation, tool-call cards, run settings (temperature / top-p / thinking level / search / safety) |
+| 🕘 **History** | stored interactions; click to load and continue, deletable |
+| 👤 **Accounts** | multi-account login, request-level rotation, rate-limit cooldown, activate/delete, profile and tier refresh |
+| ⚙️ **Service settings** | Adjust the API request body limit in MiB and show whether a restart is required |
+| 📊 **Stats** | per-model requests, rate limits, token usage |
 
-## Configuration
+## 🔧 Configuration
 
 Via environment variables or a `.env` file (see `.env.example`). Common options:
 
@@ -166,11 +194,12 @@ Via environment variables or a `.env` file (see `.env.example`). Common options:
 | `AISTUDIO_ACCOUNT_MAX_RETRIES` | `3` | Maximum accounts attempted for one request |
 | `AISTUDIO_ACCOUNT_PROFILE_REFRESH_MS` | `21600000` | Suggested account-profile refresh interval in milliseconds |
 
-Per-model defaults (thinking, safety, default tools, ...) live in `config.yaml`.
+> [!NOTE]
+> Per-model defaults (thinking, safety, default tools, ...) live in `config.yaml`.
+>
+> The WebUI service settings page reads `GET /config/runtime` and saves `body_limit_bytes` with `PUT /config/runtime`. The value is written to the runtime `.env`; an already running Fastify process keeps its current parser limit, so the UI clearly reports when a restart is required.
 
-The WebUI service settings page reads `GET /config/runtime` and saves `body_limit_bytes` with `PUT /config/runtime`. The value is written to the runtime `.env`; an already running Fastify process keeps its current parser limit, so the UI clearly reports when a restart is required.
-
-## Architecture
+## 🧱 Architecture
 
 ```text
 Client (Gemini SDK / WebUI / curl)
@@ -194,17 +223,24 @@ Client (Gemini SDK / WebUI / curl)
       Google AI Studio
 ```
 
-**BotGuard** — every request needs an encrypted snapshot proving a real browser. The snapshot generator is hooked at runtime and located by feature matching (`.snapshot({` + `content` + `yield`), so Google renaming the function in bundle updates does not break it.
+> [!NOTE]
+> **BotGuard** — every request needs an encrypted snapshot proving a real browser. The snapshot generator is hooked at runtime and located by feature matching (`.snapshot({` + `content` + `yield`), so Google renaming the function in bundle updates does not break it.
+>
+> **Live model catalog** — Google's internal RPCs reject non-browser TLS stacks with 401, so catalog requests are issued from within the managed browser page; the auth header (SAPISIDHASH) is computed server-side from the account cookies.
 
-**Live model catalog** — Google's internal RPCs reject non-browser TLS stacks with 401, so catalog requests are issued from within the managed browser page; the auth header (SAPISIDHASH) is computed server-side from the account cookies.
-
-## Acknowledgements
+## 🙏 Acknowledgements
 
 - [chrysoljq/aistudio-api](https://github.com/chrysoljq/aistudio-api) — upstream project
 - [LuanRT/BgUtils](https://github.com/LuanRT/BgUtils)
 - [iBUHub/AIStudioToAPI](https://github.com/iBUHub/AIStudioToAPI)
 - [linux.do](https://linux.do)
 
-## License
+## 📄 License
 
 MIT
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ & TypeScript · If this project helps you, give it a ⭐</sub>
+</p>
