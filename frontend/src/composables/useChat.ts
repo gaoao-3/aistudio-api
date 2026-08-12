@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { useClipboard } from '@vueuse/core';
 import { apiFetch, toastOk, toastErr } from '../api/client';
 import { cfg, model, msgs } from './useCache';
-import type { Attachment, AttachmentKind, InteractionRequest, InteractionStep, StepContent, ToolCall } from '../types';
+import type { Attachment, AttachmentKind, BuiltinToolName, InteractionRequest, InteractionStep, StepContent, ToolCall } from '../types';
 
 interface StreamEvent {
   event_type?: string;
@@ -189,9 +189,17 @@ export function useChat() {
     if (cfg.value.thinking !== 'off') gc.thinking_level = cfg.value.thinking;
     if (Object.keys(gc).length) body.generation_config = gc;
     if (cfg.value.stream === 'on') body.stream = true;
-    // Always send the tool list so turning search off does not trigger the
-    // backend's implicit default tool.
-    body.tools = cfg.value.search === 'on' ? [{ type: 'google_search' }] : [];
+    // Always send the tool list so turning all tools off is explicit. AI Studio
+    // only exposes the general built-ins on non-image, non-TTS text models.
+    const toolNames: BuiltinToolName[] = [];
+    const normalizedModel = model.value.replace(/^models\//u, '').toLowerCase();
+    const isTts = normalizedModel.includes('tts');
+    const isImage = normalizedModel.includes('image');
+    if (cfg.value.search === 'on' && !isTts) toolNames.push('google_search');
+    if (cfg.value.codeExecution === 'on' && !isTts && !isImage) toolNames.push('code_execution');
+    if (cfg.value.googleMaps === 'on' && normalizedModel.startsWith('gemini-') && !isTts && !isImage) toolNames.push('google_maps');
+    if (cfg.value.urlContext === 'on' && normalizedModel.startsWith('gemini-') && !isTts && !isImage) toolNames.push('url_context');
+    body.tools = toolNames.map(type => ({ type }));
     if (cfg.value.safety === 'off') {
       body.safety_settings = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT']
         .map(category => ({ category, threshold: 'OFF' }));

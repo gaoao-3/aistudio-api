@@ -2,13 +2,28 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { settings } from "../config.js";
 import { AsyncMutex, readJsonFile, writeJsonFile } from "../storage/atomic-json.js";
 
+export interface ApiKeyPermissions {
+  readonly google_search: boolean;
+  readonly code_execution: boolean;
+  readonly google_maps: boolean;
+  readonly url_context: boolean;
+}
+
+export const DEFAULT_API_KEY_PERMISSIONS: ApiKeyPermissions = {
+  google_search: true,
+  code_execution: true,
+  google_maps: true,
+  url_context: true,
+};
+
 interface ApiKeyRecord {
   readonly id: string;
-  readonly name: string;
+  name: string;
   readonly prefix: string;
   readonly hash: string;
   readonly created_at: string;
   last_used: string | null;
+  permissions: ApiKeyPermissions;
 }
 
 export type ApiKeySummary = Omit<ApiKeyRecord, "hash">;
@@ -20,6 +35,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validRecord(value: unknown): value is ApiKeyRecord {
   if (!isRecord(value)) return false;
   return ["id", "name", "prefix", "hash", "created_at"].every((key) => typeof value[key] === "string");
+}
+
+function normalizePermissions(value: unknown): ApiKeyPermissions {
+  if (!isRecord(value)) return { ...DEFAULT_API_KEY_PERMISSIONS };
+  return {
+    google_search: value.google_search !== false,
+    code_execution: value.code_execution !== false,
+    google_maps: value.google_maps !== false,
+    url_context: value.url_context !== false,
+  };
 }
 
 function hashKey(key: string): string {
@@ -44,7 +69,7 @@ export class ApiKeyStore {
     return this.mutex.run(async () => (await this.load()).length > 0);
   }
 
-  async create(name: string): Promise<ApiKeySummary & { key: string }> {
+  async create(name: string, permissions: ApiKeyPermissions = DEFAULT_API_KEY_PERMISSIONS): Promise<ApiKeySummary & { key: string }> {
     return this.mutex.run(async () => {
       const records = await this.load();
       const key = `ask_${randomBytes(16).toString("hex")}`;
@@ -58,10 +83,26 @@ export class ApiKeyStore {
         hash: hashKey(key),
         created_at: new Date().toISOString(),
         last_used: null,
+        permissions: normalizePermissions(permissions),
       };
       records.push(record);
       await writeJsonFile(this.path, { keys: records });
       return { ...publicRecord(record), key };
+    });
+  }
+
+  async update(
+    id: string,
+    input: { readonly name?: string; readonly permissions?: ApiKeyPermissions },
+  ): Promise<ApiKeySummary | undefined> {
+    return this.mutex.run(async () => {
+      const records = await this.load();
+      const record = records.find((item) => item.id === id);
+      if (!record) return undefined;
+      if (input.name !== undefined) record.name = input.name;
+      if (input.permissions !== undefined) record.permissions = normalizePermissions(input.permissions);
+      await writeJsonFile(this.path, { keys: records });
+      return publicRecord(record);
     });
   }
 
@@ -77,6 +118,10 @@ export class ApiKeyStore {
   }
 
   async verify(key: string): Promise<boolean> {
+    return (await this.authenticate(key)) !== undefined;
+  }
+
+  async authenticate(key: string): Promise<ApiKeySummary | undefined> {
     return this.mutex.run(async () => {
       const candidate = Buffer.from(hashKey(key), "hex");
       const records = await this.load();
@@ -84,13 +129,13 @@ export class ApiKeyStore {
         const expected = Buffer.from(item.hash, "hex");
         return expected.length === candidate.length && timingSafeEqual(expected, candidate);
       });
-      if (!record) return false;
+      if (!record) return undefined;
       const lastUsed = record.last_used ? Date.parse(record.last_used) : 0;
       if (!lastUsed || Date.now() - lastUsed >= 60_000) {
         record.last_used = new Date().toISOString();
         await writeJsonFile(this.path, { keys: records });
       }
-      return true;
+      return publicRecord(record);
     });
   }
 
@@ -101,6 +146,7 @@ export class ApiKeyStore {
     return source.filter(validRecord).map((record) => ({
       ...record,
       last_used: typeof record.last_used === "string" ? record.last_used : null,
+      permissions: normalizePermissions(record.permissions),
     }));
   }
 }

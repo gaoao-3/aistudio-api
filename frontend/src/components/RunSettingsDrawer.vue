@@ -26,15 +26,22 @@ const thinkingOptions = [
 ];
 
 // cfg 里存的是 'on'/'off' 字符串，n-switch 用 boolean，这里做桥接
-function onOffBridge(key: 'search' | 'stream' | 'safety') {
+function onOffBridge(key: 'search' | 'codeExecution' | 'googleMaps' | 'urlContext' | 'stream' | 'safety') {
   return computed<boolean>({
     get: () => cfg.value[key] === 'on',
     set: v => { cfg.value[key] = (v ? 'on' : 'off') as OnOff; },
   });
 }
 const searchOn = onOffBridge('search');
+const codeExecutionOn = onOffBridge('codeExecution');
+const googleMapsOn = onOffBridge('googleMaps');
+const urlContextOn = onOffBridge('urlContext');
 const streamOn = onOffBridge('stream');
 const safetyOn = onOffBridge('safety');
+
+const normalizedModel = computed(() => model.value.replace(/^models\//u, '').toLowerCase());
+const supportsTextTools = computed(() => !normalizedModel.value.includes('image') && !normalizedModel.value.includes('tts'));
+const supportsGeminiTools = computed(() => normalizedModel.value.startsWith('gemini-') && supportsTextTools.value);
 
 function onClearCache(): void {
   if (!confirm('确定要清理本地缓存（聊天历史和配置）吗？')) return;
@@ -71,6 +78,18 @@ function onClearCache(): void {
         <div class="flex items-center justify-between">
           <span>Google 搜索</span>
           <n-switch v-model:value="searchOn" />
+        </div>
+        <div class="flex items-center justify-between">
+          <span>代码执行</span>
+          <n-switch v-model:value="codeExecutionOn" :disabled="!supportsTextTools" />
+        </div>
+        <div class="flex items-center justify-between">
+          <span>Google Maps</span>
+          <n-switch v-model:value="googleMapsOn" :disabled="!supportsGeminiTools" />
+        </div>
+        <div class="flex items-center justify-between">
+          <span>URL Context</span>
+          <n-switch v-model:value="urlContextOn" :disabled="!supportsGeminiTools" />
         </div>
         <div class="flex items-center justify-between">
           <span>流式输出</span>

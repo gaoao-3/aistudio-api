@@ -32,9 +32,21 @@ export interface Message {
 
 export type OnOff = 'on' | 'off';
 
+export type BuiltinToolName = 'google_search' | 'code_execution' | 'google_maps' | 'url_context';
+
+export interface ApiKeyPermissions {
+  google_search: boolean;
+  code_execution: boolean;
+  google_maps: boolean;
+  url_context: boolean;
+}
+
 export interface RunConfig {
   thinking: string;
   search: OnOff;
+  codeExecution: OnOff;
+  googleMaps: OnOff;
+  urlContext: OnOff;
   stream: OnOff;
   temperature: number;
   topP: number;
@@ -210,6 +222,7 @@ export interface ApiKey {
   prefix?: string;
   created_at?: string;
   last_used?: string;
+  permissions?: ApiKeyPermissions;
 }
 
 /** POST /v1beta/interactions 请求体 */
@@ -219,7 +232,7 @@ export interface InteractionRequest {
   store: boolean;
   generation_config?: Record<string, unknown>;
   stream?: boolean;
-  tools?: { type: 'google_search' | 'code_execution' | 'google_maps' | 'url_context' | 'function' }[];
+  tools?: { type: BuiltinToolName | 'function' }[];
   safety_settings?: { category: string; threshold: string }[];
 }
 

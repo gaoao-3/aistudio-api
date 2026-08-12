@@ -4,7 +4,7 @@ import { useLocalStorage } from '@vueuse/core';
 import type { Message, ModelInfo, RunConfig } from '../types';
 
 const DEFAULT_CFG: RunConfig = {
-  thinking: 'off', search: 'off', stream: 'on',
+  thinking: 'off', search: 'off', codeExecution: 'off', googleMaps: 'off', urlContext: 'off', stream: 'on',
   temperature: 1.0, topP: 0.95, maxTokens: 32768, safety: 'on',
 };
 

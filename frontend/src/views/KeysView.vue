@@ -1,18 +1,47 @@
 <script setup lang="ts">
 // API 密钥页
 import { onMounted } from 'vue';
-import { NAlert, NButton, NCard, NInput } from 'naive-ui';
+import { NAlert, NButton, NCard, NInput, NSwitch } from 'naive-ui';
 import Icon from '../components/Icon.vue';
 import { useKeys } from '../composables/useKeys';
 import { fmtDate } from '../utils';
+import type { ApiKey, ApiKeyPermissions } from '../types';
 
-const { keys, keysLoading, keyName, newKey, keyCopied, keyBusy, loadKeys, createKey, copyNewKey, deleteKey } = useKeys();
+const {
+  keys, keysLoading, keyName, newKey, keyCopied, keyBusy, keySavingId, keyPermissions,
+  loadKeys, createKey, copyNewKey, deleteKey, saveKeyPermissions,
+} = useKeys();
 
 onMounted(loadKeys);
 
 function onDeleteKey(id: string): void {
   if (!confirm('删除后使用该密钥的调用将立即失效，确定删除？')) return;
   deleteKey(id);
+}
+
+const defaultPermissions: ApiKeyPermissions = {
+  google_search: true,
+  code_execution: true,
+  google_maps: true,
+  url_context: true,
+};
+const permissionNames = Object.keys(defaultPermissions) as Array<keyof ApiKeyPermissions>;
+
+function setPermission(key: ApiKey, name: keyof ApiKeyPermissions, value: boolean): void {
+  key.permissions = { ...defaultPermissions, ...(key.permissions || {}), [name]: value };
+}
+
+function permissionsOf(key: ApiKey): ApiKeyPermissions {
+  return { ...defaultPermissions, ...(key.permissions || {}) };
+}
+
+function permissionLabel(name: keyof ApiKeyPermissions): string {
+  return {
+    google_search: '搜索',
+    code_execution: '代码',
+    google_maps: 'Maps',
+    url_context: 'URL',
+  }[name];
 }
 </script>
 
@@ -31,6 +60,13 @@ function onDeleteKey(id: string): void {
           <template #icon><Icon name="plus" :size="18" /></template>
           创建密钥
         </NButton>
+      </div>
+      <div class="field-hint mt-3">内置工具权限（创建后也可以单独调整）</div>
+      <div class="flex flex-wrap gap-4 mt-2">
+        <label v-for="name in permissionNames" :key="name" class="flex items-center gap-2 text-[12px]">
+          <span>{{ permissionLabel(name) }}</span>
+          <n-switch v-model:value="keyPermissions[name]" size="small" />
+        </label>
       </div>
     </NCard>
 
@@ -56,6 +92,23 @@ function onDeleteKey(id: string): void {
             <span class="model-chip">{{ k.prefix }}…</span>
             <span>创建：{{ fmtDate(k.created_at) }}</span>
             <span>{{ k.last_used ? '最近使用：' + fmtDate(k.last_used) : '从未使用' }}</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 mt-2 text-[12px] text-muted">
+            <span>内置工具</span>
+            <label v-for="name in permissionNames" :key="name" class="flex items-center gap-1">
+              <span>{{ permissionLabel(name) }}</span>
+              <n-switch
+                :value="permissionsOf(k)[name]"
+                size="small"
+                @update:value="(value: boolean) => setPermission(k, name, value)"
+              />
+            </label>
+            <n-button
+              size="tiny"
+              secondary
+              :loading="keySavingId === k.id"
+              @click="saveKeyPermissions(k.id, permissionsOf(k))"
+            >保存权限</n-button>
           </div>
         </div>
         <button class="icon-btn" title="删除" @click="onDeleteKey(k.id)">

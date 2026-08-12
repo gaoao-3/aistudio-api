@@ -57,7 +57,7 @@
 | Interactions API | `/v1/interactions`、`/v1beta/interactions`、`/v1beta2/interactions` 的创建、查询、列表、删除和流式事件 |
 | AI Studio 模型目录 | 从已登录的 AI Studio 页面读取实时模型；读取失败时返回内置兜底目录 |
 | 多模态输入 | 图片、音频、视频、PDF、文本和常见代码文件；支持 `inlineData` 与 Google Files `fileData` |
-| 工具调用 | Gemini 原生 `functionCall` / `functionResponse`，保留多轮调用所需的 `thought_signature` |
+| 原生工具 | WebUI 和 API 可显式使用 Google 搜索、代码执行、Google Maps、URL Context；自定义函数调用保留多轮所需的 `thought_signature` |
 | 思考与统计 | 思考摘要、SSE 增量、token 用量和按模型统计 |
 | 多账号轮询 | `round_robin`、`lru`、`least_rl`；遇到 429 或配额限制时自动冷却并切换账号 |
 | WebUI | 对话、历史、账号、API 密钥、统计和服务设置，适配桌面端与移动端 |
@@ -145,13 +145,29 @@ x-goog-api-key: <key>
 ?key=<key>
 ```
 
-也可以在 WebUI 的「API 密钥」页面创建和删除密钥。
+也可以在 WebUI 的「API 密钥」页面创建、删除密钥，并按密钥分别控制四种内置工具权限。
 
 > [!NOTE]
 > `AISTUDIO_API_KEY` / `AISTUDIO_API_KEYS` 是保护本项目 HTTP 接口的**本地服务密钥**，不是 Google Gemini API Key，也不参与 AI Studio 模型请求。
 
 > [!WARNING]
 > 完整密钥只在创建时显示一次。不要提交 `.env`、`data/accounts`、`data/apikeys.json` 或包含运行日志的目录。
+
+创建密钥时可以设置内置工具权限；省略 `permissions` 时四种工具默认全部允许：
+
+```json
+{
+  "name": "手机客户端",
+  "permissions": {
+    "google_search": true,
+    "code_execution": false,
+    "google_maps": false,
+    "url_context": true
+  }
+}
+```
+
+权限关闭后，请求该工具会返回 `403 permission_denied`。已有旧密钥会按全部允许兼容。
 
 ## API 用法
 
@@ -166,6 +182,7 @@ x-goog-api-key: <key>
 | `POST` | `/v1beta/models/{model}:generateContent` | Gemini 原生非流式生成 |
 | `POST` | `/v1beta/models/{model}:streamGenerateContent` | Gemini 原生 SSE 流式生成 |
 | `POST` / `GET` / `DELETE` | `/v1/interactions` 等 | Interactions 创建、查询和删除 |
+| `GET` / `POST` / `PUT` / `DELETE` | `/api-keys` | 创建、查看、更新权限和删除本地服务密钥 |
 | `GET` | `/stats` | 用量统计 |
 | `GET` / `PUT` | `/config/runtime` | 运行时配置 |
 | `GET` / `POST` | `/rotation` 相关接口 | 账号轮询状态和切换 |
@@ -278,10 +295,10 @@ Interactions 会保存到运行目录。默认只保留最新 30 条；`AISTUDIO
 
 | 页面 | 能力 |
 |---|---|
-| 对话 | 流式输出、思考摘要、工具调用卡片、生图和多模态附件 |
+| 对话 | 流式输出、思考摘要、Google 搜索、代码执行、Google Maps、URL Context、工具调用卡片、生图和多模态附件 |
 | 历史 | 查看、继续和删除已保存的 Interactions；当前对话也会保存在浏览器本地缓存 |
 | 账号 | 本机登录、远程登录、Cookie 导入、激活、删除和账号资料刷新 |
-| API 密钥 | 创建、查看前缀和删除本地服务密钥 |
+| API 密钥 | 创建、查看前缀、按内置工具设置权限和删除本地服务密钥 |
 | 统计 | 查看模型请求数、成功率、限流、错误和 token 用量 |
 | 服务设置 | 调整请求体上限、浏览器/登录超时、历史保留、账号轮询和代理 |
 

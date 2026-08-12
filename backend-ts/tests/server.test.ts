@@ -247,6 +247,58 @@ test("creating the first API key enables authentication immediately", async (t) 
   assert.equal(accepted.statusCode, 200);
 });
 
+test("API key permissions gate built-in tools and can be updated", async (t) => {
+  const state = await fixture();
+  t.after(async () => { await state.app.close(); await rm(state.directory, { recursive: true, force: true }); });
+  const created = await state.app.inject({
+    method: "POST",
+    url: "/api-keys",
+    payload: {
+      name: "mobile",
+      permissions: { google_search: false, code_execution: true, google_maps: false, url_context: true },
+    },
+  });
+  assert.equal(created.statusCode, 201);
+  const createdBody = created.json() as { id: string; key: string; permissions: Record<string, boolean> };
+  assert.equal(createdBody.permissions.google_search, false);
+  const headers = { authorization: `Bearer ${createdBody.key}` };
+
+  const deniedNative = await state.app.inject({
+    method: "POST",
+    url: "/v1beta/models/gemini-3-flash-preview:generateContent",
+    headers,
+    payload: { contents: [{ role: "user", parts: [{ text: "search" }] }], tools: [{ googleSearch: {} }] },
+  });
+  assert.equal(deniedNative.statusCode, 403);
+  assert.equal(deniedNative.json().detail.type, "permission_denied");
+  assert.equal(state.bridge.calls.some((call) => call.method === "generate"), false);
+
+  const allowedInteraction = await state.app.inject({
+    method: "POST",
+    url: "/v1beta/interactions",
+    headers,
+    payload: { model: "gemini-3-flash-preview", input: "run code", tools: [{ type: "code_execution" }] },
+  });
+  assert.equal(allowedInteraction.statusCode, 200);
+
+  const updated = await state.app.inject({
+    method: "PUT",
+    url: `/api-keys/${createdBody.id}`,
+    headers,
+    payload: { permissions: { google_search: true, code_execution: true, google_maps: false, url_context: true } },
+  });
+  assert.equal(updated.statusCode, 200);
+  assert.equal(updated.json().permissions.google_search, true);
+
+  const allowedNative = await state.app.inject({
+    method: "POST",
+    url: "/v1beta/models/gemini-3-flash-preview:generateContent",
+    headers,
+    payload: { contents: [{ role: "user", parts: [{ text: "search" }] }], tools: [{ googleSearch: {} }] },
+  });
+  assert.equal(allowedNative.statusCode, 200);
+});
+
 test("Gemini generateContent is dispatched without FastAPI", async (t) => {
   const state = await fixture();
   t.after(async () => { await state.app.close(); await rm(state.directory, { recursive: true, force: true }); });

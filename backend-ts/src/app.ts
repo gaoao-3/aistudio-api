@@ -3,13 +3,18 @@ import { readFile, writeFile } from "node:fs/promises";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { parse, stringify } from "yaml";
-import { ApiKeyStore } from "./auth/api-key-store.js";
+import {
+  ApiKeyStore,
+  DEFAULT_API_KEY_PERMISSIONS,
+  type ApiKeyPermissions,
+} from "./auth/api-key-store.js";
 import { BridgeError, type BackendBridge } from "./bridge/backend-bridge.js";
 import { NativeBackendBridge } from "./bridge/native-bridge.js";
 import { RuntimeConfigStore } from "./config/runtime-config.js";
 import { settings } from "./config.js";
 import { HttpError, errorDetail } from "./http/errors.js";
 import { InteractionStore } from "./interactions/store.js";
+import type { BuiltinToolName } from "./interactions/types.js";
 
 interface AppServices {
   readonly bridge: BackendBridge;
@@ -43,6 +48,47 @@ const FALLBACK_MODELS = [
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const BUILTIN_TOOL_NAMES = ["google_search", "code_execution", "google_maps", "url_context"] as const satisfies readonly BuiltinToolName[];
+
+function parseApiKeyPermissions(value: unknown): ApiKeyPermissions {
+  if (value === undefined) return { ...DEFAULT_API_KEY_PERMISSIONS };
+  if (!isRecord(value)) throw new HttpError(422, "permissions 必须是对象");
+  const permissions = { ...DEFAULT_API_KEY_PERMISSIONS };
+  for (const name of BUILTIN_TOOL_NAMES) {
+    if (value[name] !== undefined && typeof value[name] !== "boolean") {
+      throw new HttpError(422, `permissions.${name} 必须是布尔值`);
+    }
+    if (value[name] !== undefined) permissions[name] = value[name] as boolean;
+  }
+  return permissions;
+}
+
+function requestedBuiltinTools(body: Record<string, unknown>): BuiltinToolName[] {
+  if (!Array.isArray(body.tools)) return [];
+  const names = new Set<BuiltinToolName>();
+  for (const item of body.tools) {
+    if (!isRecord(item)) continue;
+    if (typeof item.type === "string" && (BUILTIN_TOOL_NAMES as readonly string[]).includes(item.type)) {
+      names.add(item.type as BuiltinToolName);
+    }
+    if (item.googleSearch !== undefined || item.googleSearchRetrieval !== undefined) names.add("google_search");
+    if (item.codeExecution !== undefined) names.add("code_execution");
+    if (item.googleMaps !== undefined) names.add("google_maps");
+    if (item.urlContext !== undefined) names.add("url_context");
+  }
+  return [...names];
+}
+
+function enforceBuiltinToolPermissions(permissions: ApiKeyPermissions, body: Record<string, unknown>): void {
+  const denied = requestedBuiltinTools(body).find((name) => !permissions[name]);
+  if (denied) {
+    throw new HttpError(
+      403,
+      errorDetail(`当前 API 密钥无权使用内置工具: ${denied}`, "permission_denied"),
+    );
+  }
 }
 
 function bodyRecord(value: unknown): Record<string, unknown> {
@@ -111,6 +157,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const bridge = options.services?.bridge ?? new NativeBackendBridge();
   const apiKeys = options.services?.apiKeys ?? new ApiKeyStore();
   const interactions = options.services?.interactions ?? new InteractionStore();
+  const requestPermissions = new WeakMap<object, ApiKeyPermissions>();
   const app = Fastify({ logger: options.logger ?? true, bodyLimit: settings.bodyLimitBytes });
   const runtimeConfig = new RuntimeConfigStore(options.runtimeConfigFile);
 
@@ -144,9 +191,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   app.addHook("onRequest", async (request) => {
     if (isPublicRoute(request.method, request.url)) return;
     const authEnabled = settings.configuredApiKeys.size > 0 || await apiKeys.hasKeys();
-    if (!authEnabled) return;
+    if (!authEnabled) {
+      requestPermissions.set(request, { ...DEFAULT_API_KEY_PERMISSIONS });
+      return;
+    }
     const token = requestToken({ headers: request.headers, query: request.query });
-    if (token && (settings.configuredApiKeys.has(token) || await apiKeys.verify(token))) return;
+    if (token && settings.configuredApiKeys.has(token)) {
+      requestPermissions.set(request, { ...DEFAULT_API_KEY_PERMISSIONS });
+      return;
+    }
+    const authenticated = token ? await apiKeys.authenticate(token) : undefined;
+    if (authenticated) {
+      requestPermissions.set(request, authenticated.permissions);
+      return;
+    }
     throw new HttpError(
       401,
       errorDetail("Invalid or missing API key", "authentication_error"),
@@ -230,8 +288,27 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name) throw new HttpError(422, "密钥名称不能为空");
     if (name.length > 100) throw new HttpError(422, "密钥名称不能超过 100 个字符");
+    const permissions = parseApiKeyPermissions(body.permissions);
     reply.status(201);
-    return apiKeys.create(name);
+    return apiKeys.create(name, permissions);
+  });
+  app.put<{ Params: { keyId: string } }>("/api-keys/:keyId", async (request) => {
+    const body = bodyRecord(request.body);
+    const hasName = body.name !== undefined;
+    const hasPermissions = body.permissions !== undefined;
+    if (!hasName && !hasPermissions) throw new HttpError(422, "至少需要修改 name 或 permissions");
+    let name: string | undefined;
+    if (hasName) {
+      if (typeof body.name !== "string" || !body.name.trim()) throw new HttpError(422, "name 必须是非空字符串");
+      name = body.name.trim();
+      if (name.length > 100) throw new HttpError(422, "密钥名称不能超过 100 个字符");
+    }
+    const updated = await apiKeys.update(request.params.keyId, {
+      ...(name !== undefined ? { name } : {}),
+      ...(hasPermissions ? { permissions: parseApiKeyPermissions(body.permissions) } : {}),
+    });
+    if (!updated) throw new HttpError(404, "API 密钥不存在");
+    return updated;
   });
   app.delete<{ Params: { keyId: string } }>("/api-keys/:keyId", async (request, reply) => {
     if (!await apiKeys.delete(request.params.keyId)) throw new HttpError(404, "API 密钥不存在");
@@ -282,6 +359,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   for (const version of ["v1", "v1beta", "v1beta2"] as const) {
     app.post(`/${version}/interactions`, async (request, reply) => {
       const body = bodyRecord(request.body);
+      enforceBuiltinToolPermissions(requestPermissions.get(request) ?? DEFAULT_API_KEY_PERMISSIONS, body);
       if (body.stream === true) {
         await sendStream(reply, (onChunk, signal) => bridge.request("interaction_create", { body }, onChunk, signal));
         return;
@@ -344,6 +422,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const model = match[1];
     const action = match[2];
     const body = bodyRecord(request.body);
+    enforceBuiltinToolPermissions(requestPermissions.get(request) ?? DEFAULT_API_KEY_PERMISSIONS, body);
     if (action === "streamGenerateContent") {
       await sendStream(reply, (onChunk, signal) => bridge.request("generate", { model, body, stream: true }, onChunk, signal));
       return;

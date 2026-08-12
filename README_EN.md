@@ -43,7 +43,7 @@ Exposes both the **Gemini-native API** and the **Interactions API** — with mul
 | 🖥️ | **Native TypeScript backend** | Fastify, CloakBrowser, BotGuard hooks, wire codec, response parsing, and Interactions state all run in Node.js |
 | 🌐 | **WebUI** | AI Studio-style interface: chat, history, accounts, usage stats; mobile drawer layout |
 | 📡 | **Live model catalog** | Reads the AI Studio panel through the logged-in browser session, with a built-in fallback list on failure |
-| 🛠️ | **Tool calling** | Native `functionCall` / `functionResponse` replay with end-to-end `thought_signature` passthrough (required by Gemini 3 multi-turn tool use) |
+| 🛠️ | **Native tools** | WebUI and API support explicit Google Search, Code Execution, Google Maps, URL Context, and custom `functionCall` / `functionResponse` replay with `thought_signature` passthrough |
 | 🧠 | **Thinking** | Thought steps / `thought_summary` streaming deltas, `total_thought_tokens` accounting |
 | 🖼️ | **Multimodal** | The Chat page reads images, audio, video, PDF, text, and code files; the native API accepts `inlineData` and existing Google Files `fileData` |
 | 🛡️ | **Anti-detection** | CloakBrowser fingerprint-evasion Chromium, BotGuard snapshot auto-location via feature matching |
@@ -87,6 +87,22 @@ Open **<http://localhost:3006>** and follow these steps:
 ## 🔑 Authentication
 
 Once `AISTUDIO_API_KEY` is set, use `Authorization: Bearer <key>`, `x-api-key`, `x-goog-api-key`, or the `?key=` query parameter. The official google-genai SDK can point its `base_url` at this service directly.
+
+Managed API keys can carry per-tool permissions. Omit `permissions` when creating a key to allow all four built-in tools by default:
+
+```json
+{
+  "name": "mobile client",
+  "permissions": {
+    "google_search": true,
+    "code_execution": false,
+    "google_maps": false,
+    "url_context": true
+  }
+}
+```
+
+A disabled tool returns `403 permission_denied`; legacy keys are treated as allowing all tools.
 
 ## 📚 API Usage
 
@@ -153,9 +169,10 @@ curl http://localhost:3006/v1beta/models -H "Authorization: Bearer your-secret-t
 
 | Page | Description |
 |:---:|---|
-| 💬 **Chat** | streaming, collapsible thinking, multimedia/file upload, image generation, tool-call cards, run settings (temperature / top-p / thinking level / search / safety) |
+| 💬 **Chat** | streaming, collapsible thinking, multimedia/file upload, image generation, Google Search / Code Execution / Google Maps / URL Context, tool-call cards, and run settings |
 | 🕘 **History** | stored interactions; click to load and continue, deletable |
 | 👤 **Accounts** | multi-account login, request-level rotation, rate-limit cooldown, activate/delete, profile and tier refresh |
+| 🔑 **API keys** | create/delete keys and configure per-key built-in tool permissions |
 | ⚙️ **Service settings** | Adjust request size, browser/login timeouts, Interaction retention, account throttling, and proxy settings, with restart status |
 | 📊 **Stats** | per-model requests, rate limits, token usage |
 
