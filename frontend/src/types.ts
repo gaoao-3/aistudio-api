@@ -219,7 +219,7 @@ export interface InteractionRequest {
   store: boolean;
   generation_config?: Record<string, unknown>;
   stream?: boolean;
-  tools?: { type: string }[];
+  tools?: { type: 'google_search' | 'code_execution' | 'google_maps' | 'url_context' | 'function' }[];
   safety_settings?: { category: string; threshold: string }[];
 }
 

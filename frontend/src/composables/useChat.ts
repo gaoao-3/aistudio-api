@@ -189,7 +189,9 @@ export function useChat() {
     if (cfg.value.thinking !== 'off') gc.thinking_level = cfg.value.thinking;
     if (Object.keys(gc).length) body.generation_config = gc;
     if (cfg.value.stream === 'on') body.stream = true;
-    if (cfg.value.search === 'on') body.tools = [{ type: 'google_search' }];
+    // Always send the tool list so turning search off does not trigger the
+    // backend's implicit default tool.
+    body.tools = cfg.value.search === 'on' ? [{ type: 'google_search' }] : [];
     if (cfg.value.safety === 'off') {
       body.safety_settings = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT']
         .map(category => ({ category, threshold: 'OFF' }));

@@ -234,6 +234,29 @@ describe("native Interactions bridge", () => {
     }
   });
 
+  it("converts Interactions built-in tools to Gemini-native declarations", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "aistudio-native-builtins-"));
+    try {
+      const gateway = new FakeGateway();
+      gateway.responses.push({ candidates: [{ content: { parts: [{ text: "结果" }] } }] });
+      const bridge = new NativeBackendBridge(
+        gateway,
+        new InteractionStore(directory, 0),
+        new AccountStore(join(directory, "accounts")),
+        new StatsStore(join(directory, "stats.json")),
+      );
+      await bridge.request("interaction_create", { body: {
+        model: "gemini-3-flash-preview",
+        input: "搜索并计算",
+        tools: [{ type: "google_search" }, { type: "code_execution" }],
+      } });
+      const body = gateway.calls[0]?.body as { tools?: unknown[] };
+      assert.deepEqual(body.tools, [{ googleSearch: {} }, { codeExecution: {} }]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("dispatches native browser and remote login sessions", async () => {
     const directory = await mkdtemp(join(tmpdir(), "aistudio-native-login-"));
     try {

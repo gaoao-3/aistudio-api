@@ -79,13 +79,21 @@ export interface FunctionTool {
   readonly parameters?: JsonValue;
 }
 
+export type BuiltinToolName = "google_search" | "code_execution" | "google_maps" | "url_context";
+
+export interface BuiltinTool {
+  readonly type: BuiltinToolName;
+}
+
+export type InteractionTool = FunctionTool | BuiltinTool;
+
 export interface InteractionCreateRequest {
   readonly model: string;
   readonly input: string | InteractionContent | readonly InteractionContent[] | InteractionStep | readonly InteractionStep[];
   readonly previous_interaction_id?: string;
   readonly store?: boolean;
   readonly system_instruction?: string;
-  readonly tools?: readonly FunctionTool[];
+  readonly tools?: readonly InteractionTool[];
 }
 
 export interface GeminiPart {
@@ -106,7 +114,7 @@ export interface GeminiContent {
 export interface GeminiGenerateRequest {
   readonly contents: readonly GeminiContent[];
   readonly systemInstruction?: GeminiContent;
-  readonly tools?: readonly FunctionTool[];
+  readonly tools?: readonly InteractionTool[];
 }
 
 export interface ModelFunctionCall {

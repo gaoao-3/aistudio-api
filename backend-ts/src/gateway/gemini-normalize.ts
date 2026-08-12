@@ -217,7 +217,6 @@ export function normalizeGeminiRequest(modelPath: string, body: unknown): Normal
       if (names.length > 0) tools.push(...buildToolsFromNames(names, model));
     }
   }
-  if (!isTts && body.tools === undefined) tools = buildToolsFromNames(["google_search"], model);
   if (isTts) tools = null;
 
   const rawGeneration = isRecord(body.generationConfig) ? body.generationConfig : {};

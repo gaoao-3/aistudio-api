@@ -103,6 +103,17 @@ test("validates external Interactions JSON before conversion", () => {
   });
 });
 
+test("accepts AI Studio built-in tools", () => {
+  const request = parseInteractionCreateRequest({
+    model: "gemini-3.6-flash",
+    input: "搜索今天的新闻",
+    tools: [{ type: "google_search" }, { type: "code_execution" }],
+  });
+
+  assert.deepEqual(request.tools, [{ type: "google_search" }, { type: "code_execution" }]);
+  assert.deepEqual(interactionToGeminiRequest(request).tools, request.tools);
+});
+
 test("reports the exact path for malformed function arguments", () => {
   assert.throws(
     () => parseInteractionCreateRequest({

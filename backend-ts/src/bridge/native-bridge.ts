@@ -3,7 +3,7 @@ import { BridgeError, type BackendBridge } from "./backend-bridge.js";
 import { NativeGateway } from "../gateway/native-gateway.js";
 import { InteractionStore } from "../interactions/store.js";
 import { interactionToGeminiRequest, outputToSteps } from "../interactions/normalize.js";
-import type { InteractionContent, InteractionCreateRequest, InteractionStep, JsonValue, ModelOutput } from "../interactions/types.js";
+import type { BuiltinToolName, InteractionContent, InteractionCreateRequest, InteractionStep, JsonValue, ModelOutput } from "../interactions/types.js";
 import { parseInteractionCreateRequest } from "../interactions/validate.js";
 import { settings } from "../config.js";
 import { AccountStore } from "../accounts/account-store.js";
@@ -73,14 +73,24 @@ function geminiOutput(response: Record<string, unknown>): ModelOutput {
   };
 }
 
+const BUILTIN_TOOL_PAYLOADS: Readonly<Record<BuiltinToolName, Record<string, unknown>>> = {
+  google_search: { googleSearch: {} },
+  code_execution: { codeExecution: {} },
+  google_maps: { googleMaps: {} },
+  url_context: { urlContext: {} },
+};
+
 function interactionTools(request: InteractionCreateRequest): Record<string, unknown>[] | undefined {
-  return request.tools?.map(tool => ({
-    functionDeclarations: [{
-      name: tool.name,
-      ...(tool.description ? { description: tool.description } : {}),
-      ...(tool.parameters !== undefined ? { parameters: tool.parameters } : {}),
-    }],
-  }));
+  return request.tools?.map(tool => {
+    if (tool.type !== "function") return BUILTIN_TOOL_PAYLOADS[tool.type];
+    return {
+      functionDeclarations: [{
+        name: tool.name,
+        ...(tool.description ? { description: tool.description } : {}),
+        ...(tool.parameters !== undefined ? { parameters: tool.parameters } : {}),
+      }],
+    };
+  });
 }
 
 class InteractionStreamEmitter {

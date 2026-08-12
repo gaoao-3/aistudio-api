@@ -1,7 +1,8 @@
 import type {
   FunctionCallStep,
   FunctionResultStep,
-  FunctionTool,
+  BuiltinToolName,
+  InteractionTool,
   InteractionContent,
   InteractionCreateRequest,
   InteractionStep,
@@ -10,6 +11,8 @@ import type {
   ThoughtStep,
   UserInputStep,
 } from "./types.js";
+
+const BUILTIN_TOOL_TYPES = new Set<BuiltinToolName>(["google_search", "code_execution", "google_maps", "url_context"]);
 
 export class InteractionValidationError extends TypeError {
   constructor(readonly path: string, message: string) {
@@ -158,9 +161,14 @@ export function parseInteractionStep(value: unknown, path = "step"): Interaction
   throw new InteractionValidationError(`${path}.type`, `unsupported step type ${type}`);
 }
 
-function parseTool(value: unknown, path: string): FunctionTool {
+function parseTool(value: unknown, path: string): InteractionTool {
   const source = record(value, path);
-  if (source.type !== "function") throw new InteractionValidationError(`${path}.type`, "only function tools are supported");
+  if (source.type !== "function") {
+    if (typeof source.type === "string" && BUILTIN_TOOL_TYPES.has(source.type as BuiltinToolName)) {
+      return { type: source.type as BuiltinToolName };
+    }
+    throw new InteractionValidationError(`${path}.type`, "unsupported tool type");
+  }
   const parameters = source.parameters === undefined ? undefined : jsonValue(source.parameters, `${path}.parameters`);
   return {
     type: "function",

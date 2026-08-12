@@ -17,6 +17,22 @@ describe("Gemini request normalization", () => {
     assert.deepEqual(result.tools?.[0]?.[1], [["weather", null, [6, null, null, null, null, null, [["city", [1]]]]]]);
   });
 
+  it("normalizes AI Studio built-in tools only when explicitly requested", () => {
+    const withoutTools = normalizeGeminiRequest("gemini-3.5-flash", {
+      contents: [{ role: "user", parts: [{ text: "hello" }] }],
+    });
+    assert.equal(withoutTools.tools, null);
+
+    const withTools = normalizeGeminiRequest("gemini-3.5-flash", {
+      contents: [{ role: "user", parts: [{ text: "search" }] }],
+      tools: [{ googleSearch: {} }, { codeExecution: {} }],
+    });
+    assert.deepEqual(withTools.tools, [
+      [null, null, null, [null, [[]]]],
+      [[]],
+    ]);
+  });
+
   it("encodes nested JSON schema branches", () => {
     assert.deepEqual(encodeSchemaToWire({ type: "array", items: { type: "integer" } }), [5, null, null, null, null, [3]]);
   });
