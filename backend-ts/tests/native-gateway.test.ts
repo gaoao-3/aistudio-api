@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { flattenFunctionContents, functionResponseRejected } from "../src/gateway/native-gateway.js";
+import { flattenFunctionContents, functionResponseRejected, functionResponseStalled } from "../src/gateway/native-gateway.js";
 
 describe("native gateway tool-result fallback", () => {
   it("recognizes the AI Studio native function response rejection", () => {
     assert.equal(functionResponseRejected(400, "Invalid value (), Unexpected list for single non-message field."), true);
     assert.equal(functionResponseRejected(200, "Invalid value"), false);
+  });
+
+  it("recognizes a successful response containing only hidden thinking", () => {
+    const thoughtPart = [null, "still thinking", null, null, null, null, null, null, null, null, true];
+    const chunk = [[[[[thoughtPart], "model"]]], null, [1, 1, 2]];
+    assert.equal(functionResponseStalled(200, JSON.stringify([[chunk]])), true);
+    assert.equal(functionResponseStalled(400, JSON.stringify([[chunk]])), false);
   });
 
   it("preserves the whole tool timeline as textual context", () => {

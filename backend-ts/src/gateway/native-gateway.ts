@@ -54,6 +54,16 @@ export function functionResponseRejected(status: number, body: string): boolean 
   ].some(marker => lowered.includes(marker));
 }
 
+export function functionResponseStalled(status: number, body: string): boolean {
+  if (status < 200 || status >= 300) return false;
+  try {
+    const candidate = parseAIStudioResponse(body).candidate;
+    return !candidate.text && !candidate.parts.some(part => "functionCall" in part || "inlineData" in part);
+  } catch {
+    return false;
+  }
+}
+
 function hasFunctionResponse(contents: readonly AistudioContent[]): boolean {
   return contents.some(content => content.parts.some(part => Boolean(part.functionResponse)));
 }
@@ -159,7 +169,9 @@ export class NativeGateway {
     } else {
       response = await replay(await makeBody(normalized.contents, effectiveTools, false));
     }
-    if (functionResponseRejected(response.status, response.body) && hasFunctionResponse(normalized.contents)) {
+    const needsFunctionFallback = functionResponseRejected(response.status, response.body)
+      || (emulateMixedTools && functionResponseStalled(response.status, response.body));
+    if (needsFunctionFallback && hasFunctionResponse(normalized.contents)) {
       const flattened = flattenFunctionContents(normalized.contents);
       if (emulateMixedTools) {
         response = await replay(await makeBody(flattened, null, true));
