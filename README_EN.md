@@ -28,9 +28,9 @@ Exposes both the **Gemini-native API** and the **Interactions API** — with mul
 ---
 
 > [!IMPORTANT]
-> This project is **not** an official Google API and is **not** the same as connecting directly with a Gemini API key. Requests are forwarded through TypeScript/Fastify, CloakBrowser, and the AI Studio web session. Only run it with Google accounts and network environments you are authorized to use.
+> Model discovery and generation run through a logged-in Google AI Studio browser session. Only run it with Google accounts and network environments you are authorized to use.
 >
-> Fork of [chrysoljq/aistudio-api](https://github.com/chrysoljq/aistudio-api): the OpenAI/Anthropic compatibility layers were removed; this fork adds a native TypeScript gateway, the Interactions API, an AI Studio-style WebUI, and a live model catalog.
+> This project provides the Gemini-native API, Interactions API, multimodal input, tool calling, multi-account rotation, and an AI Studio-style WebUI. Model access credentials come from the AI Studio session.
 
 ---
 
@@ -149,16 +149,6 @@ curl http://localhost:3006/v1beta/models/gemini-3-flash-preview:generateContent 
 curl http://localhost:3006/v1beta/models -H "Authorization: Bearer your-secret-token"
 ```
 
-### ⚠️ Capability boundaries
-
-Features the AI Studio web app does not have fail fast with a 400 instead of silently degrading:
-
-- ❌ `agent` (Deep Research / Antigravity and other managed agents)
-- ❌ `background=true` background execution
-- ❌ `file_search` tool, audio/video `response_format`
-- ❌ arbitrary HTTP file URI fetching and automatic Google Files uploads
-- ⚠️ `seed` and `thinking_summaries` are ignored; `tool_choice` any/validated degrade to auto
-
 ## 🌐 WebUI
 
 | Page | Description |
@@ -226,7 +216,7 @@ Client (Gemini SDK / WebUI / curl)
 > [!NOTE]
 > **BotGuard** — every request needs an encrypted snapshot proving a real browser. The snapshot generator is hooked at runtime and located by feature matching (`.snapshot({` + `content` + `yield`), so Google renaming the function in bundle updates does not break it.
 >
-> **Live model catalog** — no user-provided Gemini API key is required. Model discovery and generation use only the managed AI Studio browser session; the service no longer connects to a separate official Gemini API path.
+> **Live model catalog** — the logged-in AI Studio browser session supplies the credentials for model discovery and generation.
 
 ## 🙏 Acknowledgements
 

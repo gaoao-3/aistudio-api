@@ -22,8 +22,7 @@
   <a href="#快速开始">快速开始</a> ·
   <a href="#首次登录">首次登录</a> ·
   <a href="#api-用法">API 用法</a> ·
-  <a href="#配置">配置</a> ·
-  <a href="#能力边界">能力边界</a>
+  <a href="#配置">配置</a>
 </p>
 
 ---
@@ -46,9 +45,9 @@
 ```
 
 > [!IMPORTANT]
-> 这不是 Google 官方 API，也不是 Gemini API Key 直连服务。模型目录和生成请求都通过 AI Studio 浏览器会话执行，请只使用你有权使用的 Google 账号和网络环境。
+> 模型目录和生成请求都通过已登录的 Google AI Studio 浏览器会话执行，请只使用你有权使用的 Google 账号和网络环境。
 >
-> 本项目只支持 AI Studio 会话中的生成模型。没有独立的 Google 官方 API、Embedding、OpenAI Embeddings 或 Gemini `-web` 模型链路，也不需要配置 Google Gemini API Key。
+> 本项目提供 Gemini 原生生成接口、Interactions API、多模态输入、工具调用、多账号轮询和 WebUI；模型访问凭据由 AI Studio 登录会话提供。
 
 ## 功能特性
 
@@ -343,25 +342,7 @@ Interactions 会保存到运行目录。默认只保留最新 30 条；`AISTUDIO
 | `AISTUDIO_MODEL_DEFAULTS_FILE` | `config.yaml` | 模型默认参数 YAML |
 
 > [!NOTE]
-> 配置文件中没有独立官方 API 或 Embedding 的密钥项；AI Studio 模型访问完全依赖账号的浏览器会话。
-
-## 能力边界
-
-以下接口或能力当前不会伪装成已支持：
-
-- ❌ `/v1/embeddings`
-- ❌ `/v1beta/models/{model}:embedContent`
-- ❌ `/v1beta/models/{model}:batchEmbedContents`
-- ❌ Gemini `-web` 模型和独立官方 API 上游
-- ❌ agent、Deep Research、Antigravity 等托管代理
-- ❌ `background=true` 后台执行
-- ❌ `file_search` 工具
-- ❌ 任意 HTTP 文件 URI 自动抓取
-- ❌ WebUI 之外的 Google Files 大文件自动上传
-- ❌ `audio` / `video` 作为原生输出格式
-- ⚠️ `seed`、`thinking_summaries` 等部分参数不会改变当前网关行为
-
-旧 Embedding URL 会直接返回 `404`，不会进入任何上游请求或独立网关。
+> 模型访问使用 AI Studio 账号的浏览器会话；`AISTUDIO_API_KEY` / `AISTUDIO_API_KEYS` 仅用于保护本地 HTTP 服务。
 
 ## 开发与验证
 
