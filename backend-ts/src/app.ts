@@ -3,11 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { parse, stringify } from "yaml";
-import {
-  ApiKeyStore,
-  DEFAULT_API_KEY_PERMISSIONS,
-  type ApiKeyPermissions,
-} from "./auth/api-key-store.js";
+import { ApiKeyStore } from "./auth/api-key-store.js";
 import { BridgeError, type BackendBridge } from "./bridge/backend-bridge.js";
 import { NativeBackendBridge } from "./bridge/native-bridge.js";
 import { RuntimeConfigStore } from "./config/runtime-config.js";
@@ -51,25 +47,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const BUILTIN_TOOL_NAMES = ["google_search", "code_execution", "google_maps", "url_context"] as const satisfies readonly BuiltinToolName[];
-
-function parseApiKeyPermissions(value: unknown): ApiKeyPermissions {
-  if (value === undefined) return { ...DEFAULT_API_KEY_PERMISSIONS };
-  if (!isRecord(value)) throw new HttpError(422, "permissions 必须是对象");
-  if (value.builtin_tools !== undefined && typeof value.builtin_tools !== "boolean") {
-    throw new HttpError(422, "permissions.builtin_tools 必须是布尔值");
-  }
-  if (typeof value.builtin_tools === "boolean") return { builtin_tools: value.builtin_tools };
-  // Accept the previous per-tool payload during the migration window. Any
-  // explicitly denied legacy tool becomes the single disabled-tools setting.
-  for (const name of BUILTIN_TOOL_NAMES) {
-    if (value[name] !== undefined && typeof value[name] !== "boolean") {
-      throw new HttpError(422, `permissions.${name} 必须是布尔值`);
-    }
-  }
-  return {
-    builtin_tools: !BUILTIN_TOOL_NAMES.some((name) => value[name] === false),
-  };
-}
+// The marker is added by the same-origin WebUI. API keys authenticate requests
+// but no longer grant or configure access to AI Studio's built-in tools.
+const WEB_UI_HEADER = "x-aistudio-webui";
 
 function requestedBuiltinTools(body: Record<string, unknown>): BuiltinToolName[] {
   if (!Array.isArray(body.tools)) return [];
@@ -87,13 +67,26 @@ function requestedBuiltinTools(body: Record<string, unknown>): BuiltinToolName[]
   return [...names];
 }
 
-function enforceBuiltinToolPermissions(permissions: ApiKeyPermissions, body: Record<string, unknown>): void {
-  if (requestedBuiltinTools(body).length > 0 && !permissions.builtin_tools) {
-    throw new HttpError(
-      403,
-      errorDetail("当前 API 密钥已禁用内置工具", "permission_denied"),
-    );
+function isWebUiRequest(request: { readonly headers: Record<string, unknown> }): boolean {
+  const value = request.headers[WEB_UI_HEADER];
+  return value === "1" || value === "true";
+}
+
+function rejectUnsupportedKeyPermissions(body: Record<string, unknown>): void {
+  if (body.permissions !== undefined) {
+    throw new HttpError(422, "API 密钥不再支持内置工具权限；内置原生工具仅限 WebUI 使用");
   }
+}
+
+function stripBuiltinToolsForApi(webUi: boolean, body: Record<string, unknown>): Record<string, unknown> {
+  if (webUi || requestedBuiltinTools(body).length === 0 || !Array.isArray(body.tools)) return body;
+  // External API calls keep local function declarations but never send the
+  // AI Studio-native tools. This lets existing mixed-tool callers continue
+  // their local function rounds without exposing WebUI-only capabilities.
+  return {
+    ...body,
+    tools: body.tools.filter((item) => !requestedBuiltinTools({ tools: [item] }).length),
+  };
 }
 
 function bodyRecord(value: unknown): Record<string, unknown> {
@@ -162,7 +155,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const bridge = options.services?.bridge ?? new NativeBackendBridge();
   const apiKeys = options.services?.apiKeys ?? new ApiKeyStore();
   const interactions = options.services?.interactions ?? new InteractionStore();
-  const requestPermissions = new WeakMap<object, ApiKeyPermissions>();
+  const requestContext = new WeakMap<object, { readonly webUi: boolean }>();
   const app = Fastify({ logger: options.logger ?? true, bodyLimit: settings.bodyLimitBytes });
   const runtimeConfig = new RuntimeConfigStore(options.runtimeConfigFile);
 
@@ -197,17 +190,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (isPublicRoute(request.method, request.url)) return;
     const authEnabled = settings.configuredApiKeys.size > 0 || await apiKeys.hasKeys();
     if (!authEnabled) {
-      requestPermissions.set(request, { ...DEFAULT_API_KEY_PERMISSIONS });
+      requestContext.set(request, { webUi: isWebUiRequest(request) });
       return;
     }
     const token = requestToken({ headers: request.headers, query: request.query });
     if (token && settings.configuredApiKeys.has(token)) {
-      requestPermissions.set(request, { ...DEFAULT_API_KEY_PERMISSIONS });
+      requestContext.set(request, { webUi: isWebUiRequest(request) });
       return;
     }
     const authenticated = token ? await apiKeys.authenticate(token) : undefined;
     if (authenticated) {
-      requestPermissions.set(request, authenticated.permissions);
+      requestContext.set(request, { webUi: isWebUiRequest(request) });
       return;
     }
     throw new HttpError(
@@ -293,25 +286,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     const name = typeof body.name === "string" ? body.name.trim() : "";
     if (!name) throw new HttpError(422, "密钥名称不能为空");
     if (name.length > 100) throw new HttpError(422, "密钥名称不能超过 100 个字符");
-    const permissions = parseApiKeyPermissions(body.permissions);
+    rejectUnsupportedKeyPermissions(body);
     reply.status(201);
-    return apiKeys.create(name, permissions);
+    return apiKeys.create(name);
   });
   app.put<{ Params: { keyId: string } }>("/api-keys/:keyId", async (request) => {
     const body = bodyRecord(request.body);
-    const hasName = body.name !== undefined;
-    const hasPermissions = body.permissions !== undefined;
-    if (!hasName && !hasPermissions) throw new HttpError(422, "至少需要修改 name 或 permissions");
-    let name: string | undefined;
-    if (hasName) {
-      if (typeof body.name !== "string" || !body.name.trim()) throw new HttpError(422, "name 必须是非空字符串");
-      name = body.name.trim();
-      if (name.length > 100) throw new HttpError(422, "密钥名称不能超过 100 个字符");
-    }
-    const updated = await apiKeys.update(request.params.keyId, {
-      ...(name !== undefined ? { name } : {}),
-      ...(hasPermissions ? { permissions: parseApiKeyPermissions(body.permissions) } : {}),
-    });
+    rejectUnsupportedKeyPermissions(body);
+    if (typeof body.name !== "string" || !body.name.trim()) throw new HttpError(422, "name 必须是非空字符串");
+    const name = body.name.trim();
+    if (name.length > 100) throw new HttpError(422, "密钥名称不能超过 100 个字符");
+    const updated = await apiKeys.update(request.params.keyId, { name });
     if (!updated) throw new HttpError(404, "API 密钥不存在");
     return updated;
   });
@@ -363,8 +348,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   for (const version of ["v1", "v1beta", "v1beta2"] as const) {
     app.post(`/${version}/interactions`, async (request, reply) => {
-      const body = bodyRecord(request.body);
-      enforceBuiltinToolPermissions(requestPermissions.get(request) ?? DEFAULT_API_KEY_PERMISSIONS, body);
+      const body = stripBuiltinToolsForApi(requestContext.get(request)?.webUi === true, bodyRecord(request.body));
       if (body.stream === true) {
         await sendStream(reply, (onChunk, signal) => bridge.request("interaction_create", { body }, onChunk, signal));
         return;
@@ -426,8 +410,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!match?.[1] || !match[2]) throw new HttpError(404, errorDetail("Not Found", "not_found"));
     const model = match[1];
     const action = match[2];
-    const body = bodyRecord(request.body);
-    enforceBuiltinToolPermissions(requestPermissions.get(request) ?? DEFAULT_API_KEY_PERMISSIONS, body);
+    const body = stripBuiltinToolsForApi(requestContext.get(request)?.webUi === true, bodyRecord(request.body));
     if (action === "streamGenerateContent") {
       await sendStream(reply, (onChunk, signal) => bridge.request("generate", { model, body, stream: true }, onChunk, signal));
       return;

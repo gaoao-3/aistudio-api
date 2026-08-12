@@ -88,18 +88,7 @@ Open **<http://localhost:3006>** and follow these steps:
 
 Once `AISTUDIO_API_KEY` is set, use `Authorization: Bearer <key>`, `x-api-key`, `x-goog-api-key`, or the `?key=` query parameter. The official google-genai SDK can point its `base_url` at this service directly.
 
-Managed API keys can disable built-in tools altogether. Omit `permissions` when creating a key to allow built-in tools by default:
-
-```json
-{
-  "name": "mobile client",
-  "permissions": {
-    "builtin_tools": false
-  }
-}
-```
-
-When disabled, any built-in tool request returns `403 permission_denied`. Legacy keys and the previous per-tool format are migrated to this single switch.
+API keys only authenticate external requests. Built-in Google tools are WebUI-only: native tool declarations are removed from external API requests before they reach AI Studio, while local custom function tools remain available.
 
 ## 📚 API Usage
 
@@ -169,7 +158,7 @@ curl http://localhost:3006/v1beta/models -H "Authorization: Bearer your-secret-t
 | 💬 **Chat** | streaming, collapsible thinking, multimedia/file upload, image generation, Google Search / Code Execution / Google Maps / URL Context, tool-call cards, and run settings |
 | 🕘 **History** | stored interactions; click to load and continue, deletable |
 | 👤 **Accounts** | multi-account login, request-level rotation, rate-limit cooldown, activate/delete, profile and tier refresh |
-| 🔑 **API keys** | create/delete keys and configure the per-key “disable built-in tools” switch |
+| 🔑 **API keys** | create, inspect, and delete local service keys used for API authentication |
 | ⚙️ **Service settings** | Adjust request size, browser/login timeouts, Interaction retention, account throttling, and proxy settings, with restart status |
 | 📊 **Stats** | per-model requests, rate limits, token usage |
 

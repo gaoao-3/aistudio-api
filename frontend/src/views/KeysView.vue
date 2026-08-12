@@ -1,15 +1,14 @@
 <script setup lang="ts">
 // API 密钥页
-import { computed, onMounted } from 'vue';
-import { NAlert, NButton, NCard, NInput, NSwitch } from 'naive-ui';
+import { onMounted } from 'vue';
+import { NAlert, NButton, NCard, NInput } from 'naive-ui';
 import Icon from '../components/Icon.vue';
 import { useKeys } from '../composables/useKeys';
 import { fmtDate } from '../utils';
-import type { ApiKey, ApiKeyPermissions } from '../types';
 
 const {
-  keys, keysLoading, keyName, newKey, keyCopied, keyBusy, keySavingId, keyPermissions,
-  loadKeys, createKey, copyNewKey, deleteKey, saveKeyPermissions,
+  keys, keysLoading, keyName, newKey, keyCopied, keyBusy,
+  loadKeys, createKey, copyNewKey, deleteKey,
 } = useKeys();
 
 onMounted(loadKeys);
@@ -19,28 +18,12 @@ function onDeleteKey(id: string): void {
   deleteKey(id);
 }
 
-const defaultPermissions: ApiKeyPermissions = {
-  builtin_tools: true,
-};
-
-const disableBuiltinTools = computed({
-  get: () => !keyPermissions.value.builtin_tools,
-  set: (value: boolean) => { keyPermissions.value.builtin_tools = !value; },
-});
-
-function setBuiltinToolsDisabled(key: ApiKey, value: boolean): void {
-  key.permissions = { builtin_tools: !value };
-}
-
-function permissionsOf(key: ApiKey): ApiKeyPermissions {
-  return { ...defaultPermissions, ...(key.permissions || {}) };
-}
 </script>
 
 <template>
   <div class="page">
     <div class="page-title">API 密钥</div>
-    <div class="page-sub">创建后完整密钥仅显示一次，请立即复制保存。设置任一密钥后鉴权自动开启。</div>
+    <div class="page-sub">创建后完整密钥仅显示一次，请立即复制保存。密钥仅用于 API 鉴权，内置原生工具只在 WebUI 会话中可用。</div>
 
     <NCard size="small" class="mb-5">
       <div class="flex gap-2 items-center flex-wrap">
@@ -52,11 +35,6 @@ function permissionsOf(key: ApiKey): ApiKeyPermissions {
           <template #icon><Icon name="plus" :size="18" /></template>
           创建密钥
         </NButton>
-      </div>
-      <div class="field-hint mt-3">关闭后此密钥不能调用 Google 搜索、代码执行、Google Maps、URL Context 等内置工具。</div>
-      <div class="flex items-center gap-2 mt-2 text-[12px]">
-        <span>禁用内置工具</span>
-        <n-switch v-model:value="disableBuiltinTools" size="small" />
       </div>
     </NCard>
 
@@ -82,20 +60,6 @@ function permissionsOf(key: ApiKey): ApiKeyPermissions {
             <span class="model-chip">{{ k.prefix }}…</span>
             <span>创建：{{ fmtDate(k.created_at) }}</span>
             <span>{{ k.last_used ? '最近使用：' + fmtDate(k.last_used) : '从未使用' }}</span>
-          </div>
-          <div class="flex flex-wrap items-center gap-3 mt-2 text-[12px] text-muted">
-            <span>禁用内置工具</span>
-            <n-switch
-              :value="!permissionsOf(k).builtin_tools"
-              size="small"
-              @update:value="(value: boolean) => setBuiltinToolsDisabled(k, value)"
-            />
-            <n-button
-              size="tiny"
-              secondary
-              :loading="keySavingId === k.id"
-              @click="saveKeyPermissions(k.id, permissionsOf(k))"
-            >保存设置</n-button>
           </div>
         </div>
         <button class="icon-btn" title="删除" @click="onDeleteKey(k.id)">

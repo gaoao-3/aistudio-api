@@ -10,6 +10,9 @@ export function toastInfo(msg: string) { message.info(msg); }
 
 export function authHeaders(headers: Record<string, string> = {}): Record<string, string> {
   const next = { ...headers };
+  // Native built-in tools are a WebUI-only capability. API keys still
+  // authenticate the request, but they no longer carry a tool permission.
+  if (!next['X-AIStudio-WebUI'] && !next['x-aistudio-webui']) next['X-AIStudio-WebUI'] = '1';
   const token = (localStorage.getItem('asp_api_token') || '').trim();
   if (token && !next.Authorization && !next.authorization) next.Authorization = `Bearer ${token}`;
   return next;

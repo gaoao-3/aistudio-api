@@ -2,14 +2,6 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { settings } from "../config.js";
 import { AsyncMutex, readJsonFile, writeJsonFile } from "../storage/atomic-json.js";
 
-export interface ApiKeyPermissions {
-  readonly builtin_tools: boolean;
-}
-
-export const DEFAULT_API_KEY_PERMISSIONS: ApiKeyPermissions = {
-  builtin_tools: true,
-};
-
 interface ApiKeyRecord {
   readonly id: string;
   name: string;
@@ -17,7 +9,6 @@ interface ApiKeyRecord {
   readonly hash: string;
   readonly created_at: string;
   last_used: string | null;
-  permissions: ApiKeyPermissions;
 }
 
 export type ApiKeySummary = Omit<ApiKeyRecord, "hash">;
@@ -29,14 +20,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validRecord(value: unknown): value is ApiKeyRecord {
   if (!isRecord(value)) return false;
   return ["id", "name", "prefix", "hash", "created_at"].every((key) => typeof value[key] === "string");
-}
-
-function normalizePermissions(value: unknown): ApiKeyPermissions {
-  if (!isRecord(value)) return { ...DEFAULT_API_KEY_PERMISSIONS };
-  if (typeof value.builtin_tools === "boolean") return { builtin_tools: value.builtin_tools };
-  // Migrate the short-lived per-tool format to the intended single switch.
-  const legacyNames = ["google_search", "code_execution", "google_maps", "url_context"];
-  return { builtin_tools: !legacyNames.some((name) => value[name] === false) };
 }
 
 function hashKey(key: string): string {
@@ -61,7 +44,7 @@ export class ApiKeyStore {
     return this.mutex.run(async () => (await this.load()).length > 0);
   }
 
-  async create(name: string, permissions: ApiKeyPermissions = DEFAULT_API_KEY_PERMISSIONS): Promise<ApiKeySummary & { key: string }> {
+  async create(name: string): Promise<ApiKeySummary & { key: string }> {
     return this.mutex.run(async () => {
       const records = await this.load();
       const key = `ask_${randomBytes(16).toString("hex")}`;
@@ -75,7 +58,6 @@ export class ApiKeyStore {
         hash: hashKey(key),
         created_at: new Date().toISOString(),
         last_used: null,
-        permissions: normalizePermissions(permissions),
       };
       records.push(record);
       await writeJsonFile(this.path, { keys: records });
@@ -85,14 +67,13 @@ export class ApiKeyStore {
 
   async update(
     id: string,
-    input: { readonly name?: string; readonly permissions?: ApiKeyPermissions },
+    input: { readonly name?: string },
   ): Promise<ApiKeySummary | undefined> {
     return this.mutex.run(async () => {
       const records = await this.load();
       const record = records.find((item) => item.id === id);
       if (!record) return undefined;
       if (input.name !== undefined) record.name = input.name;
-      if (input.permissions !== undefined) record.permissions = normalizePermissions(input.permissions);
       await writeJsonFile(this.path, { keys: records });
       return publicRecord(record);
     });
@@ -135,10 +116,15 @@ export class ApiKeyStore {
     const payload = await readJsonFile(this.path);
     const source = isRecord(payload) ? payload.keys : payload;
     if (!Array.isArray(source)) return [];
-    return source.filter(validRecord).map((record) => ({
-      ...record,
-      last_used: typeof record.last_used === "string" ? record.last_used : null,
-      permissions: normalizePermissions(record.permissions),
-    }));
+    return source.filter(validRecord).map((record) => {
+      // Older files may still contain the removed permissions field. Ignore it
+      // and let the next write naturally persist the key without that legacy
+      // setting.
+      const { permissions: _permissions, ...withoutLegacyPermissions } = record as ApiKeyRecord & { permissions?: unknown };
+      return {
+        ...withoutLegacyPermissions,
+        last_used: typeof record.last_used === "string" ? record.last_used : null,
+      };
+    });
   }
 }

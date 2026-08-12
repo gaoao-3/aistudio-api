@@ -247,20 +247,24 @@ test("creating the first API key enables authentication immediately", async (t) 
   assert.equal(accepted.statusCode, 200);
 });
 
-test("API key permissions gate built-in tools and can be updated", async (t) => {
+test("API keys do not configure built-in tools; native tools are WebUI-only", async (t) => {
   const state = await fixture();
   t.after(async () => { await state.app.close(); await rm(state.directory, { recursive: true, force: true }); });
+  const legacyCreate = await state.app.inject({
+    method: "POST",
+    url: "/api-keys",
+    payload: { name: "legacy", permissions: { builtin_tools: false } },
+  });
+  assert.equal(legacyCreate.statusCode, 422);
+
   const created = await state.app.inject({
     method: "POST",
     url: "/api-keys",
-    payload: {
-      name: "mobile",
-      permissions: { builtin_tools: false },
-    },
+    payload: { name: "mobile" },
   });
   assert.equal(created.statusCode, 201);
-  const createdBody = created.json() as { id: string; key: string; permissions: { builtin_tools: boolean } };
-  assert.equal(createdBody.permissions.builtin_tools, false);
+  const createdBody = created.json() as { id: string; key: string; permissions?: unknown };
+  assert.equal("permissions" in createdBody, false);
   const headers = { authorization: `Bearer ${createdBody.key}` };
 
   const deniedNative = await state.app.inject({
@@ -269,9 +273,22 @@ test("API key permissions gate built-in tools and can be updated", async (t) => 
     headers,
     payload: { contents: [{ role: "user", parts: [{ text: "search" }] }], tools: [{ googleSearch: {} }] },
   });
-  assert.equal(deniedNative.statusCode, 403);
-  assert.equal(deniedNative.json().detail.type, "permission_denied");
-  assert.equal(state.bridge.calls.some((call) => call.method === "generate"), false);
+  assert.equal(deniedNative.statusCode, 200);
+  const nativeCall = [...state.bridge.calls].reverse().find((call) => call.method === "generate");
+  assert.deepEqual((nativeCall?.params.body as { tools?: unknown[] } | undefined)?.tools, []);
+
+  const allowedLocalFunction = await state.app.inject({
+    method: "POST",
+    url: "/v1beta/models/gemini-3-flash-preview:generateContent",
+    headers,
+    payload: {
+      contents: [{ role: "user", parts: [{ text: "call my function" }] }],
+      tools: [{ functionDeclarations: [{ name: "local_function", description: "local" }] }],
+    },
+  });
+  assert.equal(allowedLocalFunction.statusCode, 200);
+  const localFunctionCall = [...state.bridge.calls].reverse().find((call) => call.method === "generate");
+  assert.equal(((localFunctionCall?.params.body as { tools?: unknown[] } | undefined)?.tools || []).length, 1);
 
   const deniedInteraction = await state.app.inject({
     method: "POST",
@@ -279,24 +296,25 @@ test("API key permissions gate built-in tools and can be updated", async (t) => 
     headers,
     payload: { model: "gemini-3-flash-preview", input: "run code", tools: [{ type: "code_execution" }] },
   });
-  assert.equal(deniedInteraction.statusCode, 403);
+  assert.equal(deniedInteraction.statusCode, 200);
+  const interactionCall = [...state.bridge.calls].reverse().find((call) => call.method === "interaction_create");
+  assert.deepEqual((interactionCall?.params.body as { tools?: unknown[] } | undefined)?.tools, []);
 
-  const updated = await state.app.inject({
+  const deniedPermissionUpdate = await state.app.inject({
     method: "PUT",
     url: `/api-keys/${createdBody.id}`,
     headers,
     payload: { permissions: { builtin_tools: true } },
   });
-  assert.equal(updated.statusCode, 200);
-  assert.equal(updated.json().permissions.builtin_tools, true);
+  assert.equal(deniedPermissionUpdate.statusCode, 422);
 
-  const allowedNative = await state.app.inject({
+  const allowedWebUiNative = await state.app.inject({
     method: "POST",
     url: "/v1beta/models/gemini-3-flash-preview:generateContent",
-    headers,
+    headers: { ...headers, "x-aistudio-webui": "1" },
     payload: { contents: [{ role: "user", parts: [{ text: "search" }] }], tools: [{ googleSearch: {} }] },
   });
-  assert.equal(allowedNative.statusCode, 200);
+  assert.equal(allowedWebUiNative.statusCode, 200);
 });
 
 test("Gemini generateContent is dispatched without FastAPI", async (t) => {

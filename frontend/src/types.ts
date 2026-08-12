@@ -34,10 +34,6 @@ export type OnOff = 'on' | 'off';
 
 export type BuiltinToolName = 'google_search' | 'code_execution' | 'google_maps' | 'url_context';
 
-export interface ApiKeyPermissions {
-  builtin_tools: boolean;
-}
-
 export interface RunConfig {
   thinking: string;
   search: OnOff;
@@ -219,7 +215,6 @@ export interface ApiKey {
   prefix?: string;
   created_at?: string;
   last_used?: string;
-  permissions?: ApiKeyPermissions;
 }
 
 /** POST /v1beta/interactions 请求体 */

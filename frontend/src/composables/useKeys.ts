@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { useClipboard } from '@vueuse/core';
 import { apiFetch, toastErr, toastOk } from '../api/client';
-import type { ApiKey, ApiKeyPermissions } from '../types';
+import type { ApiKey } from '../types';
 
 interface CreateKeyResponse {
   key?: string;
@@ -15,16 +15,6 @@ const keyName = ref('');
 const newKey = ref('');
 const keyCopied = ref(false);
 const keyBusy = ref(false);
-const keySavingId = ref('');
-const keyPermissions = ref<ApiKeyPermissions>({
-  builtin_tools: true,
-});
-
-function normalizedPermissions(value?: Partial<ApiKeyPermissions>): ApiKeyPermissions {
-  return {
-    builtin_tools: value?.builtin_tools !== false,
-  };
-}
 
 export function useKeys() {
   async function loadKeys(): Promise<void> {
@@ -46,7 +36,6 @@ export function useKeys() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: keyName.value.trim() || '未命名密钥',
-          permissions: keyPermissions.value,
         }),
       });
       const d = await r.json().catch(() => ({})) as CreateKeyResponse;
@@ -54,7 +43,6 @@ export function useKeys() {
       newKey.value = d.key;
       keyCopied.value = false;
       keyName.value = '';
-      keyPermissions.value = normalizedPermissions();
       await loadKeys();
     } catch (e) { toastErr('网络错误'); }
     finally { keyBusy.value = false; }
@@ -75,41 +63,8 @@ export function useKeys() {
     } catch (e) { toastErr('网络错误'); }
   }
 
-  async function saveKeyPermissions(id: string, permissions: ApiKeyPermissions): Promise<boolean> {
-    if (keySavingId.value) return false;
-    keySavingId.value = id;
-    try {
-      const r = await apiFetch(`/api-keys/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ permissions: normalizedPermissions(permissions) }),
-      });
-      if (!r.ok) {
-        const detail = await r.json().catch(() => ({})) as { detail?: unknown };
-        const message = typeof detail.detail === 'string'
-          ? detail.detail
-          : detail.detail && typeof detail.detail === 'object' && 'message' in detail.detail
-            ? String((detail.detail as { message?: unknown }).message ?? '')
-            : `权限保存失败（HTTP ${r.status}）`;
-        toastErr(message);
-        return false;
-      }
-      const updated = await r.json() as ApiKey;
-      keys.value = keys.value.map(item => item.id === id
-        ? { ...item, ...updated, permissions: normalizedPermissions(updated.permissions) }
-        : item);
-      toastOk('权限已保存');
-      return true;
-    } catch (e) {
-      toastErr('网络错误');
-      return false;
-    } finally {
-      keySavingId.value = '';
-    }
-  }
-
   return {
-    keys, keysLoading, keyName, newKey, keyCopied, keyBusy, keySavingId, keyPermissions,
-    loadKeys, createKey, copyNewKey, deleteKey, saveKeyPermissions,
+    keys, keysLoading, keyName, newKey, keyCopied, keyBusy,
+    loadKeys, createKey, copyNewKey, deleteKey,
   };
 }
