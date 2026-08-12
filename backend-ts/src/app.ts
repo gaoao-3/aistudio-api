@@ -55,14 +55,20 @@ const BUILTIN_TOOL_NAMES = ["google_search", "code_execution", "google_maps", "u
 function parseApiKeyPermissions(value: unknown): ApiKeyPermissions {
   if (value === undefined) return { ...DEFAULT_API_KEY_PERMISSIONS };
   if (!isRecord(value)) throw new HttpError(422, "permissions 必须是对象");
-  const permissions = { ...DEFAULT_API_KEY_PERMISSIONS };
+  if (value.builtin_tools !== undefined && typeof value.builtin_tools !== "boolean") {
+    throw new HttpError(422, "permissions.builtin_tools 必须是布尔值");
+  }
+  if (typeof value.builtin_tools === "boolean") return { builtin_tools: value.builtin_tools };
+  // Accept the previous per-tool payload during the migration window. Any
+  // explicitly denied legacy tool becomes the single disabled-tools setting.
   for (const name of BUILTIN_TOOL_NAMES) {
     if (value[name] !== undefined && typeof value[name] !== "boolean") {
       throw new HttpError(422, `permissions.${name} 必须是布尔值`);
     }
-    if (value[name] !== undefined) permissions[name] = value[name] as boolean;
   }
-  return permissions;
+  return {
+    builtin_tools: !BUILTIN_TOOL_NAMES.some((name) => value[name] === false),
+  };
 }
 
 function requestedBuiltinTools(body: Record<string, unknown>): BuiltinToolName[] {
@@ -82,11 +88,10 @@ function requestedBuiltinTools(body: Record<string, unknown>): BuiltinToolName[]
 }
 
 function enforceBuiltinToolPermissions(permissions: ApiKeyPermissions, body: Record<string, unknown>): void {
-  const denied = requestedBuiltinTools(body).find((name) => !permissions[name]);
-  if (denied) {
+  if (requestedBuiltinTools(body).length > 0 && !permissions.builtin_tools) {
     throw new HttpError(
       403,
-      errorDetail(`当前 API 密钥无权使用内置工具: ${denied}`, "permission_denied"),
+      errorDetail("当前 API 密钥已禁用内置工具", "permission_denied"),
     );
   }
 }

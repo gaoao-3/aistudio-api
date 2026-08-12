@@ -17,18 +17,12 @@ const keyCopied = ref(false);
 const keyBusy = ref(false);
 const keySavingId = ref('');
 const keyPermissions = ref<ApiKeyPermissions>({
-  google_search: true,
-  code_execution: true,
-  google_maps: true,
-  url_context: true,
+  builtin_tools: true,
 });
 
 function normalizedPermissions(value?: Partial<ApiKeyPermissions>): ApiKeyPermissions {
   return {
-    google_search: value?.google_search !== false,
-    code_execution: value?.code_execution !== false,
-    google_maps: value?.google_maps !== false,
-    url_context: value?.url_context !== false,
+    builtin_tools: value?.builtin_tools !== false,
   };
 }
 
@@ -91,7 +85,13 @@ export function useKeys() {
         body: JSON.stringify({ permissions: normalizedPermissions(permissions) }),
       });
       if (!r.ok) {
-        toastErr('权限保存失败');
+        const detail = await r.json().catch(() => ({})) as { detail?: unknown };
+        const message = typeof detail.detail === 'string'
+          ? detail.detail
+          : detail.detail && typeof detail.detail === 'object' && 'message' in detail.detail
+            ? String((detail.detail as { message?: unknown }).message ?? '')
+            : `权限保存失败（HTTP ${r.status}）`;
+        toastErr(message);
         return false;
       }
       const updated = await r.json() as ApiKey;

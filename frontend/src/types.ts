@@ -35,10 +35,7 @@ export type OnOff = 'on' | 'off';
 export type BuiltinToolName = 'google_search' | 'code_execution' | 'google_maps' | 'url_context';
 
 export interface ApiKeyPermissions {
-  google_search: boolean;
-  code_execution: boolean;
-  google_maps: boolean;
-  url_context: boolean;
+  builtin_tools: boolean;
 }
 
 export interface RunConfig {

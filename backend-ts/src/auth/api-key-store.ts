@@ -3,17 +3,11 @@ import { settings } from "../config.js";
 import { AsyncMutex, readJsonFile, writeJsonFile } from "../storage/atomic-json.js";
 
 export interface ApiKeyPermissions {
-  readonly google_search: boolean;
-  readonly code_execution: boolean;
-  readonly google_maps: boolean;
-  readonly url_context: boolean;
+  readonly builtin_tools: boolean;
 }
 
 export const DEFAULT_API_KEY_PERMISSIONS: ApiKeyPermissions = {
-  google_search: true,
-  code_execution: true,
-  google_maps: true,
-  url_context: true,
+  builtin_tools: true,
 };
 
 interface ApiKeyRecord {
@@ -39,12 +33,10 @@ function validRecord(value: unknown): value is ApiKeyRecord {
 
 function normalizePermissions(value: unknown): ApiKeyPermissions {
   if (!isRecord(value)) return { ...DEFAULT_API_KEY_PERMISSIONS };
-  return {
-    google_search: value.google_search !== false,
-    code_execution: value.code_execution !== false,
-    google_maps: value.google_maps !== false,
-    url_context: value.url_context !== false,
-  };
+  if (typeof value.builtin_tools === "boolean") return { builtin_tools: value.builtin_tools };
+  // Migrate the short-lived per-tool format to the intended single switch.
+  const legacyNames = ["google_search", "code_execution", "google_maps", "url_context"];
+  return { builtin_tools: !legacyNames.some((name) => value[name] === false) };
 }
 
 function hashKey(key: string): string {

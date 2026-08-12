@@ -145,7 +145,7 @@ x-goog-api-key: <key>
 ?key=<key>
 ```
 
-也可以在 WebUI 的「API 密钥」页面创建、删除密钥，并按密钥分别控制四种内置工具权限。
+也可以在 WebUI 的「API 密钥」页面创建、删除密钥，并按密钥设置是否禁用内置工具。
 
 > [!NOTE]
 > `AISTUDIO_API_KEY` / `AISTUDIO_API_KEYS` 是保护本项目 HTTP 接口的**本地服务密钥**，不是 Google Gemini API Key，也不参与 AI Studio 模型请求。
@@ -153,21 +153,18 @@ x-goog-api-key: <key>
 > [!WARNING]
 > 完整密钥只在创建时显示一次。不要提交 `.env`、`data/accounts`、`data/apikeys.json` 或包含运行日志的目录。
 
-创建密钥时可以设置内置工具权限；省略 `permissions` 时四种工具默认全部允许：
+创建密钥时可以设置是否禁用内置工具；省略 `permissions` 时默认允许内置工具：
 
 ```json
 {
   "name": "手机客户端",
   "permissions": {
-    "google_search": true,
-    "code_execution": false,
-    "google_maps": false,
-    "url_context": true
+    "builtin_tools": false
   }
 }
 ```
 
-权限关闭后，请求该工具会返回 `403 permission_denied`。已有旧密钥会按全部允许兼容。
+禁用后，请求任意内置工具会返回 `403 permission_denied`。已有旧密钥和旧版逐项权限数据会兼容为总开关。
 
 ## API 用法
 
@@ -298,7 +295,7 @@ Interactions 会保存到运行目录。默认只保留最新 30 条；`AISTUDIO
 | 对话 | 流式输出、思考摘要、Google 搜索、代码执行、Google Maps、URL Context、工具调用卡片、生图和多模态附件 |
 | 历史 | 查看、继续和删除已保存的 Interactions；当前对话也会保存在浏览器本地缓存 |
 | 账号 | 本机登录、远程登录、Cookie 导入、激活、删除和账号资料刷新 |
-| API 密钥 | 创建、查看前缀、按内置工具设置权限和删除本地服务密钥 |
+| API 密钥 | 创建、查看前缀、设置“禁用内置工具”和删除本地服务密钥 |
 | 统计 | 查看模型请求数、成功率、限流、错误和 token 用量 |
 | 服务设置 | 调整请求体上限、浏览器/登录超时、历史保留、账号轮询和代理 |
 

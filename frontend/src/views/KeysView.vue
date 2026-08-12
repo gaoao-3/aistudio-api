@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // API 密钥页
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { NAlert, NButton, NCard, NInput, NSwitch } from 'naive-ui';
 import Icon from '../components/Icon.vue';
 import { useKeys } from '../composables/useKeys';
@@ -20,28 +20,20 @@ function onDeleteKey(id: string): void {
 }
 
 const defaultPermissions: ApiKeyPermissions = {
-  google_search: true,
-  code_execution: true,
-  google_maps: true,
-  url_context: true,
+  builtin_tools: true,
 };
-const permissionNames = Object.keys(defaultPermissions) as Array<keyof ApiKeyPermissions>;
 
-function setPermission(key: ApiKey, name: keyof ApiKeyPermissions, value: boolean): void {
-  key.permissions = { ...defaultPermissions, ...(key.permissions || {}), [name]: value };
+const disableBuiltinTools = computed({
+  get: () => !keyPermissions.value.builtin_tools,
+  set: (value: boolean) => { keyPermissions.value.builtin_tools = !value; },
+});
+
+function setBuiltinToolsDisabled(key: ApiKey, value: boolean): void {
+  key.permissions = { builtin_tools: !value };
 }
 
 function permissionsOf(key: ApiKey): ApiKeyPermissions {
   return { ...defaultPermissions, ...(key.permissions || {}) };
-}
-
-function permissionLabel(name: keyof ApiKeyPermissions): string {
-  return {
-    google_search: '搜索',
-    code_execution: '代码',
-    google_maps: 'Maps',
-    url_context: 'URL',
-  }[name];
 }
 </script>
 
@@ -61,12 +53,10 @@ function permissionLabel(name: keyof ApiKeyPermissions): string {
           创建密钥
         </NButton>
       </div>
-      <div class="field-hint mt-3">内置工具权限（创建后也可以单独调整）</div>
-      <div class="flex flex-wrap gap-4 mt-2">
-        <label v-for="name in permissionNames" :key="name" class="flex items-center gap-2 text-[12px]">
-          <span>{{ permissionLabel(name) }}</span>
-          <n-switch v-model:value="keyPermissions[name]" size="small" />
-        </label>
+      <div class="field-hint mt-3">关闭后此密钥不能调用 Google 搜索、代码执行、Google Maps、URL Context 等内置工具。</div>
+      <div class="flex items-center gap-2 mt-2 text-[12px]">
+        <span>禁用内置工具</span>
+        <n-switch v-model:value="disableBuiltinTools" size="small" />
       </div>
     </NCard>
 
@@ -94,21 +84,18 @@ function permissionLabel(name: keyof ApiKeyPermissions): string {
             <span>{{ k.last_used ? '最近使用：' + fmtDate(k.last_used) : '从未使用' }}</span>
           </div>
           <div class="flex flex-wrap items-center gap-3 mt-2 text-[12px] text-muted">
-            <span>内置工具</span>
-            <label v-for="name in permissionNames" :key="name" class="flex items-center gap-1">
-              <span>{{ permissionLabel(name) }}</span>
-              <n-switch
-                :value="permissionsOf(k)[name]"
-                size="small"
-                @update:value="(value: boolean) => setPermission(k, name, value)"
-              />
-            </label>
+            <span>禁用内置工具</span>
+            <n-switch
+              :value="!permissionsOf(k).builtin_tools"
+              size="small"
+              @update:value="(value: boolean) => setBuiltinToolsDisabled(k, value)"
+            />
             <n-button
               size="tiny"
               secondary
               :loading="keySavingId === k.id"
               @click="saveKeyPermissions(k.id, permissionsOf(k))"
-            >保存权限</n-button>
+            >保存设置</n-button>
           </div>
         </div>
         <button class="icon-btn" title="删除" @click="onDeleteKey(k.id)">

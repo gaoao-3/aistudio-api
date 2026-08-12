@@ -255,12 +255,12 @@ test("API key permissions gate built-in tools and can be updated", async (t) => 
     url: "/api-keys",
     payload: {
       name: "mobile",
-      permissions: { google_search: false, code_execution: true, google_maps: false, url_context: true },
+      permissions: { builtin_tools: false },
     },
   });
   assert.equal(created.statusCode, 201);
-  const createdBody = created.json() as { id: string; key: string; permissions: Record<string, boolean> };
-  assert.equal(createdBody.permissions.google_search, false);
+  const createdBody = created.json() as { id: string; key: string; permissions: { builtin_tools: boolean } };
+  assert.equal(createdBody.permissions.builtin_tools, false);
   const headers = { authorization: `Bearer ${createdBody.key}` };
 
   const deniedNative = await state.app.inject({
@@ -273,22 +273,22 @@ test("API key permissions gate built-in tools and can be updated", async (t) => 
   assert.equal(deniedNative.json().detail.type, "permission_denied");
   assert.equal(state.bridge.calls.some((call) => call.method === "generate"), false);
 
-  const allowedInteraction = await state.app.inject({
+  const deniedInteraction = await state.app.inject({
     method: "POST",
     url: "/v1beta/interactions",
     headers,
     payload: { model: "gemini-3-flash-preview", input: "run code", tools: [{ type: "code_execution" }] },
   });
-  assert.equal(allowedInteraction.statusCode, 200);
+  assert.equal(deniedInteraction.statusCode, 403);
 
   const updated = await state.app.inject({
     method: "PUT",
     url: `/api-keys/${createdBody.id}`,
     headers,
-    payload: { permissions: { google_search: true, code_execution: true, google_maps: false, url_context: true } },
+    payload: { permissions: { builtin_tools: true } },
   });
   assert.equal(updated.statusCode, 200);
-  assert.equal(updated.json().permissions.google_search, true);
+  assert.equal(updated.json().permissions.builtin_tools, true);
 
   const allowedNative = await state.app.inject({
     method: "POST",
