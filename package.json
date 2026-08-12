@@ -1,5 +1,5 @@
 {
-  "name": "aistudi-web-api",
+  "name": "aistudio-web-api",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.13.1",
@@ -14,4 +14,3 @@
     "dev:frontend": "pnpm --dir frontend dev"
   }
 }
-

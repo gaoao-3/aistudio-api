@@ -18,8 +18,7 @@ function displayValue(v: string | number | boolean | null | undefined, unit?: st
   return unit ? `${v} ${unit}` : String(v);
 }
 
-function inputPlaceholder(key: string, sensitive?: boolean): string {
-  if (key === 'upstream_api_key') return '输入完整 API Key；未修改请直接保存';
+function inputPlaceholder(sensitive?: boolean): string {
   if (sensitive) return '输入完整代理地址；未修改请直接保存';
   return '留空使用系统默认';
 }
@@ -91,8 +90,8 @@ function inputPlaceholder(key: string, sensitive?: boolean): string {
         <NInput
           v-else
           :value="typeof setting.input === 'string' ? setting.input : ''"
-          :type="setting.key === 'upstream_api_key' ? 'password' : 'text'"
-          :placeholder="inputPlaceholder(setting.key, setting.sensitive)"
+          type="text"
+          :placeholder="inputPlaceholder(setting.sensitive)"
           class="w-full"
           @update:value="(v: string) => setting.input = v"
         />

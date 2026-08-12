@@ -20,14 +20,15 @@ export class InteractionStore {
   constructor(
     readonly directory = settings.interactionsDir,
     readonly ttlSeconds = settings.interactionsTtlSeconds,
+    readonly maxCount = settings.interactionsMaxCount,
   ) {}
 
   async save(id: string, record: StoredInteraction): Promise<void> {
     if (!safeId(id)) throw new TypeError(`Invalid interaction id: ${id}`);
     await this.mutex.run(async () => {
       await mkdir(this.directory, { recursive: true });
-      await this.cleanup();
       await writeJsonFile(this.path(id), record);
+      await this.cleanup();
     });
   }
 
@@ -86,18 +87,41 @@ export class InteractionStore {
   }
 
   private async cleanup(): Promise<void> {
-    if (this.ttlSeconds === 0) return;
-    const cutoff = Date.now() - this.ttlSeconds * 1000;
     let entries;
     try {
       entries = await readdir(this.directory, { withFileTypes: true });
     } catch {
       return;
     }
-    await Promise.all(entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map(async (entry) => {
-      const path = join(this.directory, entry.name);
+    const files = (await Promise.all(entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map(async (entry) => {
+        const path = join(this.directory, entry.name);
+        try {
+          const metadata = await stat(path);
+          let orderMs = metadata.mtimeMs;
+          try {
+            const parsed = JSON.parse(await readFile(path, "utf8")) as StoredInteraction;
+            const createdMs = Date.parse(String(parsed.interaction?.created ?? ""));
+            if (Number.isFinite(createdMs)) orderMs = createdMs;
+          } catch {
+            // Invalid records still participate in age/count cleanup by file mtime.
+          }
+          return { path, mtimeMs: metadata.mtimeMs, orderMs };
+        } catch {
+          return undefined;
+        }
+      })))
+      .filter((file): file is { path: string; mtimeMs: number; orderMs: number } => Boolean(file));
+
+    const cutoff = this.ttlSeconds > 0 ? Date.now() - this.ttlSeconds * 1000 : undefined;
+    const expired = cutoff === undefined ? [] : files.filter((file) => file.mtimeMs < cutoff);
+    const expiredPaths = new Set(expired.map((file) => file.path));
+    const remaining = files.filter((file) => !expiredPaths.has(file.path)).sort((left, right) => right.orderMs - left.orderMs);
+    const overflow = this.maxCount > 0 ? remaining.slice(this.maxCount) : [];
+    await Promise.all([...expired, ...overflow].map(async (file) => {
       try {
-        if ((await stat(path)).mtimeMs < cutoff) await rm(path);
+        await rm(file.path);
       } catch {
         // Ignore races and unreadable files.
       }

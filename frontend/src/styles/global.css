@@ -773,6 +773,8 @@ pre.codeblock:hover::after { opacity: 1; }
   color: var(--primary);
 }
 
+.rm-alert { margin-bottom: 16px; }
+
 .rm-waiting {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   padding: 26px 0;
@@ -783,7 +785,7 @@ pre.codeblock:hover::after { opacity: 1; }
 .rm-prompt {
   display: flex; align-items: flex-start; gap: 12px;
   padding: 12px 14px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
   background: var(--bg);
   border: 1px solid var(--border-soft);
   border-radius: 10px;
@@ -797,35 +799,102 @@ pre.codeblock:hover::after { opacity: 1; }
 }
 .rm-prompt p { flex: 1; min-width: 0; font-size: 14px; color: var(--text); line-height: 1.5; }
 
-.rm-options { display: flex; flex-direction: column; gap: 8px; }
+/* ----- 邮箱 / 密码字段 ----- */
+.rm-form { display: flex; flex-direction: column; gap: 16px; }
+.rm-field { display: flex; flex-direction: column; gap: 8px; }
+.rm-label { font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: 0.1px; }
+.rm-hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.rm-hint-center { text-align: center; }
+.rm-actions { display: flex; justify-content: flex-end; }
+.rm-footer { display: flex; justify-content: flex-end; }
+
+/* ----- 验证码 ----- */
+.rm-otp { display: flex; flex-direction: column; gap: 18px; }
+.rm-otp-field { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.rm-otp-field .rm-label { align-self: flex-start; }
+.rm-otp-input { max-width: 240px; }
+.rm-otp-input .n-input__input-el {
+  height: 52px;
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 8px;
+  text-align: center;
+  color: var(--text);
+}
+.rm-otp-input .n-input__placeholder {
+  text-align: center;
+  letter-spacing: 8px;
+  font-family: var(--mono);
+}
+.rm-otp-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.rm-otp-actions .n-button:first-child { align-self: stretch; }
+
+/* ----- 选项列表 ----- */
+.rm-options { display: flex; flex-direction: column; gap: 10px; }
 .rm-option {
   display: flex; align-items: center; gap: 12px;
-  padding: 11px 14px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border-radius: 12px;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color .15s, background .15s;
+  transition: border-color .15s, background .15s, box-shadow .15s, transform .12s;
 }
-.rm-option:hover { background: var(--primary-container); border-color: color-mix(in srgb, var(--primary) 32%, transparent); color: var(--text); }
+.rm-option:hover:not(:disabled) {
+  background: var(--primary-container);
+  border-color: color-mix(in srgb, var(--primary) 32%, transparent);
+  color: var(--text);
+}
+.rm-option:active:not(:disabled) { transform: scale(0.99); }
+.rm-option:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.rm-option:disabled { opacity: 0.55; cursor: not-allowed; }
 .rm-option-num {
-  width: 24px; height: 24px; flex-shrink: 0;
+  width: 26px; height: 26px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 8px;
   background: var(--primary-container);
   color: var(--primary-bright);
   font-size: 12px;
+  font-family: var(--mono);
   font-weight: 600;
 }
+.rm-option-text { flex: 1; min-width: 0; line-height: 1.45; overflow-wrap: anywhere; }
+.rm-option-chevron { flex-shrink: 0; color: var(--muted); transition: color .15s, transform .15s; }
+.rm-option:hover:not(:disabled) .rm-option-chevron { color: var(--primary-bright); transform: translateX(2px); }
 
-.rm-manual { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 10px 0 4px; text-align: center; }
-.rm-manual p { font-size: 13px; color: var(--muted); }
+/* ----- 手机确认状态面板 ----- */
+.rm-manual {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 22px 18px 18px;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  text-align: center;
+}
+.rm-manual-text { display: flex; flex-direction: column; gap: 4px; }
+.rm-manual-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.rm-manual-hint { font-size: 13px; color: var(--muted); line-height: 1.55; }
+.rm-status {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--primary-container);
+  color: var(--primary-bright);
+  font-size: 12px;
+}
 .rm-phone-pulse {
-  width: 52px; height: 52px;
+  width: 56px; height: 56px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%;
   background: var(--primary-container);
@@ -836,6 +905,23 @@ pre.codeblock:hover::after { opacity: 1; }
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 30%, transparent); }
   70% { box-shadow: 0 0 0 14px transparent; }
   100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rm-phone-pulse { animation: none; }
+  .rm-option { transition: none; }
+}
+
+/* ----- 移动端间距 ----- */
+@media (max-width: 480px) {
+  .rm-prompt { padding: 10px 12px; margin-bottom: 14px; gap: 10px; }
+  .rm-step-icon { width: 30px; height: 30px; }
+  .rm-form { gap: 14px; }
+  .rm-actions .n-button { flex: 1; }
+  .rm-option { padding: 12px 12px; min-height: 52px; }
+  .rm-otp { gap: 16px; }
+  .rm-otp-input { max-width: 100%; }
+  .rm-otp-input .n-input__input-el { height: 50px; font-size: 20px; letter-spacing: 6px; }
+  .rm-manual { padding: 18px 14px 14px; }
 }
 
 /* ========== 表单辅助 ========== */

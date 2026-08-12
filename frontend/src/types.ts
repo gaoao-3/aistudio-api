@@ -131,6 +131,7 @@ export interface LoginStep {
   prompt?: string;
   sensitive?: boolean;
   options?: string[];
+  phase?: string;
 }
 
 export interface RemoteLoginState {

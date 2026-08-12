@@ -1,6 +1,6 @@
 <div align="center">
 
-# ✨ aistudi-web-api
+# ✨ aistudio-web-api
 
 **Turn the Google AI Studio web playground into your own callable Gemini API service.**
 
@@ -38,11 +38,11 @@ Exposes both the **Gemini-native API** and the **Interactions API** — with mul
 
 |  | Capability | Description |
 |:---:|---|---|
-| ⚡ | **Gemini-native API** | `/v1beta/models/{model}:generateContent`, `:streamGenerateContent`, `:embedContent`, `:batchEmbedContents`, `/v1beta/models` |
+| ⚡ | **Gemini-native API** | `/v1beta/models/{model}:generateContent`, `:streamGenerateContent`, `/v1beta/models` |
 | 💬 | **Interactions API** | `/v1/interactions`, `/v1beta/interactions`, and `/v1beta2/interactions` (create / get / delete / list / cancel), locally emulated `previous_interaction_id` server state, true incremental SSE events |
 | 🖥️ | **Native TypeScript backend** | Fastify, CloakBrowser, BotGuard hooks, wire codec, response parsing, and Interactions state all run in Node.js |
 | 🌐 | **WebUI** | AI Studio-style interface: chat, history, accounts, usage stats; mobile drawer layout |
-| 📡 | **Live model catalog** | Optionally pulls the latest models via AI Studio's internal ListModels RPC; without an upstream key, the built-in list is used |
+| 📡 | **Live model catalog** | Reads the AI Studio panel through the logged-in browser session, with a built-in fallback list on failure |
 | 🛠️ | **Tool calling** | Native `functionCall` / `functionResponse` replay with end-to-end `thought_signature` passthrough (required by Gemini 3 multi-turn tool use) |
 | 🧠 | **Thinking** | Thought steps / `thought_summary` streaming deltas, `total_thought_tokens` accounting |
 | 🖼️ | **Multimodal** | The Chat page reads images, audio, video, PDF, text, and code files; the native API accepts `inlineData` and existing Google Files `fileData` |
@@ -145,7 +145,7 @@ curl http://localhost:3006/v1beta/models/gemini-3-flash-preview:generateContent 
     "tools": [{"googleSearchRetrieval": {}}]
   }'
 
-# Model list (live when AISTUDIO_UPSTREAM_API_KEY is configured; built-in fallback otherwise)
+# Model list (live with a logged-in AI Studio account; built-in fallback otherwise)
 curl http://localhost:3006/v1beta/models -H "Authorization: Bearer your-secret-token"
 ```
 
@@ -186,9 +186,9 @@ Via environment variables or a `.env` file (see `.env.example`). Common options:
 | `AISTUDIO_PROXY_URL` | system proxy | Browser proxy URL |
 | `AISTUDIO_RUNTIME_ROOT` | project root | Runtime directory containing accounts, keys, interactions, and stats |
 | `AISTUDIO_AUTH_FILE` | active account | Playwright storage state used by CloakBrowser |
-| `AISTUDIO_UPSTREAM_API_KEY` | empty | Optional for live model discovery; a real Gemini API key is required for Embedding |
 | `AISTUDIO_INTERACTIONS_DIR` | `data/interactions` | Interaction state directory |
-| `AISTUDIO_INTERACTIONS_TTL_SECONDS` | `604800` | Interaction retention; `0` keeps forever |
+| `AISTUDIO_INTERACTIONS_MAX_COUNT` | `30` | Keep only the newest interactions; `0` disables the count limit |
+| `AISTUDIO_INTERACTIONS_TTL_SECONDS` | `0` | Optional time-based cleanup in seconds; `0` disables time expiration |
 | `AISTUDIO_ACCOUNT_ROTATION_MODE` | `round_robin` | Account rotation mode: `round_robin` / `lru` / `least_rl` |
 | `AISTUDIO_ACCOUNT_COOLDOWN_SECONDS` | `60` | Cooldown after a 429/quota-limit response, in seconds |
 | `AISTUDIO_ACCOUNT_MAX_RETRIES` | `3` | Maximum accounts attempted for one request |
@@ -226,7 +226,7 @@ Client (Gemini SDK / WebUI / curl)
 > [!NOTE]
 > **BotGuard** — every request needs an encrypted snapshot proving a real browser. The snapshot generator is hooked at runtime and located by feature matching (`.snapshot({` + `content` + `yield`), so Google renaming the function in bundle updates does not break it.
 >
-> **Live model catalog** — Google's internal RPCs reject non-browser TLS stacks with 401, so catalog requests are issued from within the managed browser page; the auth header (SAPISIDHASH) is computed server-side from the account cookies.
+> **Live model catalog** — no user-provided Gemini API key is required. Model discovery and generation use only the managed AI Studio browser session; the service no longer connects to a separate official Gemini API path.
 
 ## 🙏 Acknowledgements
 

@@ -12,6 +12,7 @@ import type { AccountProfile } from "../accounts/account-profile.js";
 import { StatsStore } from "../stats/stats-store.js";
 import { LoginSessionManager, type LoginSessionBackend } from "../accounts/login-session-manager.js";
 import { NativeBrowserSession } from "../gateway/browser-session.js";
+import { filterSupportedModelCatalog } from "../gateway/model-catalog.js";
 import { AsyncMutex } from "../storage/atomic-json.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -149,7 +150,6 @@ export interface NativeGatewayBackend {
   models(): Promise<Record<string, unknown>[]>;
   generate(model: string, body: unknown): Promise<Record<string, unknown>>;
   generateStream(model: string, body: unknown, onResponse: (response: Record<string, unknown>) => void, signal?: AbortSignal): Promise<Record<string, unknown>>;
-  embed(model: string, body: Record<string, unknown>, batch: boolean): Promise<Record<string, unknown>>;
   inspectAccountProfile?(): Promise<AccountProfile>;
 }
 
@@ -206,7 +206,8 @@ export class NativeBackendBridge implements BackendBridge {
     else if (method === "stats") result = await this.stats.snapshot();
     else if (method === "models") {
       const active = await this.accounts.active();
-      result = active ? await (await this.gatewayForAccount(active.id)).models() : await this.gateway.models();
+      const nativeModels = active ? await (await this.gatewayForAccount(active.id)).models() : await this.gateway.models();
+      result = filterSupportedModelCatalog(nativeModels);
     }
     else if (method === "reload_model_defaults") result = { ok: true };
     else if (method === "accounts_list") result = await this.accounts.list();
@@ -321,10 +322,13 @@ export class NativeBackendBridge implements BackendBridge {
       const model = String(params.model ?? "");
       let response: Record<string, unknown>;
       try {
+        const streamResponse = params.stream === true && onChunk
+          ? (chunk: Record<string, unknown>) => onChunk(`data: ${JSON.stringify(chunk)}\n\n`)
+          : undefined;
         response = await this.generateWithRotation(
           model,
           params.body,
-          params.stream === true && onChunk ? chunk => onChunk(`data: ${JSON.stringify(chunk)}\n\n`) : undefined,
+          streamResponse,
           signal,
           () => this.stats.record(model, "rate_limited"),
         );
@@ -337,19 +341,6 @@ export class NativeBackendBridge implements BackendBridge {
         onChunk("data: [DONE]\n\n");
       }
       result = response;
-    } else if (method === "embed") {
-      this.requireEmbeddingKey();
-      const model = String(params.model ?? "");
-      try {
-        result = await this.embedWithRotation(model, isRecord(params.body) ? params.body : {}, params.batch === true);
-        await this.stats.record(model, "success", isRecord(result) && isRecord(result.usageMetadata) ? result.usageMetadata : undefined);
-      } catch (error) {
-        await this.stats.record(model, isRateLimitedError(error) ? "rate_limited" : "errors");
-        throw error;
-      }
-    } else if (method === "openai_embeddings") {
-      this.requireEmbeddingKey();
-      result = await this.openAIEmbeddings(isRecord(params.body) ? params.body : {});
     } else if (method === "interaction_create") {
       result = await this.createInteraction(isRecord(params.body) ? params.body : {}, onChunk, signal);
     } else {
@@ -447,72 +438,6 @@ export class NativeBackendBridge implements BackendBridge {
       }
     }
     throw lastError ?? new Error("没有可用的 Google 账号");
-  }
-
-  private async embedWithRotation(model: string, body: Record<string, unknown>, batch: boolean): Promise<Record<string, unknown>> {
-    const all = await this.accounts.list();
-    if (all.length === 0) return this.gateway.embed(model, body, batch);
-    const maxAttempts = Math.min(Math.max(1, settings.accountMaxRetries), all.length);
-    const attempted = new Set<string>();
-    let lastError: unknown;
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const account = await this.rotator.getNextAccount();
-      if (!account) break;
-      if (attempted.has(account.id)) {
-        attempt -= 1;
-        if (attempted.size >= all.length) break;
-        continue;
-      }
-      attempted.add(account.id);
-      try {
-        const gateway = await this.gatewayForAccount(account.id);
-        await this.accounts.activate(account.id);
-        const response = await gateway.embed(model, body, batch);
-        this.rotator.recordSuccess(account.id);
-        return response;
-      } catch (error) {
-        lastError = error;
-        if (isRateLimitedError(error)) {
-          this.rotator.recordRateLimited(account.id);
-          if (attempt + 1 < maxAttempts) continue;
-        } else {
-          this.rotator.recordError(account.id);
-        }
-        throw error;
-      }
-    }
-    throw lastError ?? new Error("没有可用的 Google 账号");
-  }
-
-  private requireEmbeddingKey(): void {
-    if (!settings.upstreamApiKeyExplicit) {
-      throw new BridgeError(503, {
-        message: "Embedding requires an explicit AISTUDIO_UPSTREAM_API_KEY; configure a Gemini API key",
-        type: "upstream_configuration_error",
-      });
-    }
-  }
-
-  private async openAIEmbeddings(body: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const model = String(body.model ?? "").replace(/^models\//u, "");
-    const inputs = typeof body.input === "string" ? [body.input] : Array.isArray(body.input) ? body.input : [];
-    if (!model || inputs.length === 0 || !inputs.every(item => typeof item === "string")) {
-      throw new BridgeError(400, { message: "model and string input are required", type: "bad_request" });
-    }
-    const response = await this.embedWithRotation(model, {
-      requests: inputs.map(input => ({ model: `models/${model}`, content: { parts: [{ text: input }] } })),
-    }, true);
-    const embeddings = Array.isArray(response.embeddings) ? response.embeddings : [];
-    return {
-      object: "list",
-      data: embeddings.map((item, index) => ({
-        object: "embedding",
-        embedding: isRecord(item) && Array.isArray(item.values) ? item.values : [],
-        index,
-      })),
-      model,
-      usage: { prompt_tokens: 0, total_tokens: 0 },
-    };
   }
 
   private async createInteraction(body: Record<string, unknown>, onChunk?: (chunk: string) => void, signal?: AbortSignal): Promise<Record<string, unknown>> {

@@ -119,12 +119,22 @@ const SETTING_DEFS: ReadonlyArray<SettingDef> = [
     key: "interactions_ttl_seconds",
     env: "AISTUDIO_INTERACTIONS_TTL_SECONDS",
     label: "Interactions 保留时长",
-    description: "对话记录保留秒数，0 表示永久保留",
+    description: "可选的按时间清理秒数，0 表示不按时间删除",
     type: "integer",
     min: 0,
     unit: "秒",
-    defaultValue: 604_800,
+    defaultValue: 0,
     readEffective: () => settings.interactionsTtlSeconds,
+  },
+  {
+    key: "interactions_max_count",
+    env: "AISTUDIO_INTERACTIONS_MAX_COUNT",
+    label: "历史记录条数上限",
+    description: "只保留最新的若干条对话记录，0 表示不限制条数",
+    type: "integer",
+    min: 0,
+    defaultValue: 30,
+    readEffective: () => settings.interactionsMaxCount,
   },
   {
     key: "account_cooldown_seconds",
@@ -168,16 +178,6 @@ const SETTING_DEFS: ReadonlyArray<SettingDef> = [
     defaultValue: "",
     sensitive: true,
     readEffective: () => settings.proxyUrl ?? "",
-  },
-  {
-    key: "upstream_api_key",
-    env: "AISTUDIO_UPSTREAM_API_KEY",
-    label: "上游 API Key",
-    description: "可选。用于读取实时模型目录；Embedding 必须填写可调用 Gemini API 的真实 key。保存后需重启服务",
-    type: "string",
-    defaultValue: "",
-    sensitive: true,
-    readEffective: () => settings.upstreamApiKey,
   },
 ];
 
@@ -303,8 +303,8 @@ export class RuntimeConfigStore {
     const source = await this.readSource();
     const views: RuntimeSettingView[] = SETTING_DEFS.map((def) => {
       const parsedConfigured = parseEnvValue(def, readEnvValue(source, def.env));
-      // 代理和上游 key 留空都表示未配置；前者回退系统代理，后者禁用实时模型目录。
-      const configuredValue = ["proxy_url", "upstream_api_key"].includes(def.key) && parsedConfigured === ""
+      // 代理留空表示未配置并回退到系统代理。
+      const configuredValue = def.key === "proxy_url" && parsedConfigured === ""
         ? null
         : parsedConfigured;
       const effectiveValue = def.readEffective();

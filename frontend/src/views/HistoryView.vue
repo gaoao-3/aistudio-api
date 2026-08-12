@@ -13,7 +13,7 @@ onMounted(loadHistory);
 <template>
   <div class="page">
     <div class="page-title">历史记录</div>
-    <div class="page-sub">服务端存储的 interactions（store=true 的请求）。点击可载入对话继续。</div>
+    <div class="page-sub">服务端默认保留最近 30 条 interactions（store=true 的请求）。点击可载入对话继续。</div>
 
     <div v-if="historyLoading" class="empty-hint"><Icon name="loader" :size="18" class="spin" />加载中…</div>
     <div v-else-if="!history.length" class="empty-hint">暂无历史记录</div>

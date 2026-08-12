@@ -76,6 +76,12 @@ export function loginPhaseFromUrl(url: string): string | undefined {
     ["/v3/signin/challenge/selection", "selection"],
     ["/v3/signin/challenge/totp", "totp"],
     ["/v3/signin/challenge/ootp", "ootp"],
+    ["/v3/signin/challenge/idv", "idv"],
+    ["/v3/signin/challenge/ipp", "ipp"],
+    ["/v3/signin/challenge/backupcode", "backupcode"],
+    ["/v3/signin/challenge/authzen", "authzen"],
+    ["/v3/signin/challenge/pk", "passkey"],
+    ["/v3/signin/challenge/webauthn", "webauthn"],
   ];
   return known.find(([marker]) => url.includes(marker))?.[1];
 }
@@ -293,7 +299,7 @@ export class LoginSessionManager implements LoginSessionBackend {
           const title = text(document.querySelector("h1, [role='heading']"));
           const password = document.querySelector("input[type='password'], input[name='Passwd']");
           if (visible(password)) return { kind: "password", prompt: title || "请输入密码", sensitive: true };
-          const otp = document.querySelector("input[autocomplete='one-time-code'], input[name='totpPin'], input[inputmode='numeric'], input[type='tel']");
+          const otp = document.querySelector("input[autocomplete='one-time-code'], input[name='totpPin'], input[name='idvPin'], input[name='Pin'], input[name='code'], input[inputmode='numeric'], input[type='tel']");
           if (visible(otp)) return { kind: "otp", prompt: title || "请输入验证码" };
           const email = document.querySelector("input[type='email'], input[name='identifier']");
           if (visible(email)) return { kind: "email", prompt: title || "请输入邮箱" };
@@ -307,13 +313,18 @@ export class LoginSessionManager implements LoginSessionBackend {
             return { kind: "selection", prompt: title || "请选择其他登录方式", options: [...new Set(alternateActions)].slice(0, 8) };
           }
           if (currentPhase === "selection") {
-            const ignored = /^(back|next|try another way|帮助|隐私权|条款)$/iu;
-            const options = [...document.querySelectorAll("button, [role='button']")].filter(visible).map(element => text(element)).filter(value => value && value.length <= 100 && !ignored.test(value));
-            return { kind: "selection", prompt: title || "请选择登录方式", options: [...new Set(options)].slice(0, 8) };
+            const ignored = /^(back|next|continue|verify|try another way|use another|choose another|两步验证|2-step verification|two-step verification|帮助|隐私权|条款)$/iu;
+            const selectors = "[data-challengetype], [data-challengeid], [role='link'], [role='option'], button, [role='button']";
+            const options = [...document.querySelectorAll(selectors)]
+              .filter(visible)
+              .map(element => text(element))
+              .filter(value => value && value !== title && value.length <= 160 && !ignored.test(value));
+            const unique = [...new Set(options)].slice(0, 8);
+            if (unique.length > 0) return { kind: "selection", prompt: title || "请选择登录方式", options: unique };
           }
           const body = text(document.body).toLowerCase();
-          if (/tap yes|check your phone|security key|passkey|qr code|在手机上|安全密钥|通行密钥/u.test(body)) {
-            return { kind: "manual", prompt: title || "请在手机或安全设备上完成确认" };
+          if (/tap yes|check your phone|security key|passkey|qr code|2-step verification|two-step verification|verify it(?:'|’)s you|在手机上|安全密钥|通行密钥|两步验证|验证身份/u.test(body)) {
+            return { kind: "manual", prompt: title || "请完成 Google 两步验证" };
           }
           return currentPhase ? { kind: "manual", prompt: title || "请按 Google 页面提示完成验证" } : undefined;
         }, phase);
@@ -348,11 +359,13 @@ export class LoginSessionManager implements LoginSessionBackend {
             const rect = element.getBoundingClientRect();
             return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
           };
-          const candidates = [...document.querySelectorAll("[data-identifier], button, [role='button']")].filter(visible);
+          const selectors = "[data-identifier], [data-challengetype], [data-challengeid], [role='link'], [role='option'], button, [role='button']";
+          const candidates = [...document.querySelectorAll(selectors)].filter(visible);
           const target = candidates.find(element => element.textContent?.replace(/\s+/gu, " ").trim() === label)
             ?? candidates.find(element => element.textContent?.includes(label));
-          target?.click();
-          return Boolean(target);
+          const clickable = target?.closest("[data-challengetype], [data-challengeid], [data-identifier], [role='link'], [role='option'], button, [role='button']") as HTMLElement | null;
+          (clickable ?? target)?.click();
+          return Boolean(clickable ?? target);
         }, selected);
         if (!clicked) throw new Error("Google 登录选项已变化，请重试");
       } catch (error) {
@@ -388,7 +401,7 @@ export class LoginSessionManager implements LoginSessionBackend {
     const selectors: Record<Exclude<LoginStepKind, "selection" | "manual">, string> = {
       email: "input[type='email'], input[name='identifier']",
       password: "input[type='password'], input[name='Passwd']",
-      otp: "input[autocomplete='one-time-code'], input[name='totpPin'], input[inputmode='numeric'], input[type='tel']",
+      otp: "input[autocomplete='one-time-code'], input[name='totpPin'], input[name='idvPin'], input[name='Pin'], input[name='code'], input[inputmode='numeric'], input[type='tel']",
     };
     const selector = selectors[step.kind];
     const input = page.locator(selector).first();

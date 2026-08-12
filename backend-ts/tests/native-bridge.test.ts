@@ -17,7 +17,6 @@ class FakeGateway implements NativeGatewayBackend {
   async close(): Promise<void> {}
   async switchAuth(): Promise<void> {}
   async models(): Promise<Record<string, unknown>[]> { return []; }
-  async embed(): Promise<Record<string, unknown>> { return {}; }
   async generate(model: string, body: unknown): Promise<Record<string, unknown>> {
     this.calls.push({ model, body });
     const error = this.errors.shift();
@@ -60,6 +59,47 @@ class FakeLogin implements LoginSessionBackend {
 }
 
 describe("native Interactions bridge", () => {
+  it("uses only the AI Studio session for model discovery and generation", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "aistudio-session-routing-"));
+    try {
+      const native = new FakeGateway();
+      native.models = async () => [
+        { name: "models/gemini-native", supportedGenerationMethods: ["generateContent"] },
+        { name: "models/embedding-only", supportedGenerationMethods: ["embedContent"] },
+      ];
+      native.responses.push({ candidates: [{ content: { parts: [{ text: "native" }] } }] });
+      const bridge = new NativeBackendBridge(
+        native,
+        new InteractionStore(directory, 0),
+        new AccountStore(join(directory, "accounts")),
+        new StatsStore(join(directory, "stats.json")),
+      );
+      const catalog = await bridge.request<Record<string, unknown>[]>("models");
+      assert.deepEqual(catalog.map(item => item.name), ["models/gemini-native"]);
+      await bridge.request("generate", { model: "gemini-native", body: {} });
+      assert.equal(native.calls.length, 1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not fall back to an official catalog when AI Studio discovery fails", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "aistudio-catalog-failure-"));
+    try {
+      const native = new FakeGateway();
+      native.models = async () => { throw new Error("ListModels returned HTTP 401"); };
+      const bridge = new NativeBackendBridge(
+        native,
+        new InteractionStore(directory, 0),
+        new AccountStore(join(directory, "accounts")),
+        new StatsStore(join(directory, "stats.json")),
+      );
+      await assert.rejects(bridge.request("models"), /ListModels returned HTTP 401/u);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("uses separate account gateways for request-level rotation", async () => {
     const directory = await mkdtemp(join(tmpdir(), "aistudio-native-rotation-"));
     try {

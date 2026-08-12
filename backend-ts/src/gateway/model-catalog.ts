@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { settings } from "../config.js";
 import { NativeBrowserSession } from "./browser-session.js";
 
 const LIST_MODELS_URL = "https://alkalimakersuite-pa.clients6.google.com/$rpc/google.internal.alkali.applications.makersuite.v1.MakerSuiteService/ListModels";
@@ -12,6 +11,19 @@ function signature(timestamp: number, value: string, label: string): string {
 
 function valueAt(row: unknown[], index: number, fallback: unknown): unknown {
   return row[index] ?? fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function supportsPublicModelOperations(model: unknown): model is Record<string, unknown> {
+  if (!isRecord(model) || !Array.isArray(model.supportedGenerationMethods)) return isRecord(model);
+  return model.supportedGenerationMethods.includes("generateContent");
+}
+
+export function filterSupportedModelCatalog(models: readonly Record<string, unknown>[]): Record<string, unknown>[] {
+  return models.filter(supportsPublicModelOperations);
 }
 
 export function parseModelCatalog(payload: unknown): Record<string, unknown>[] {
@@ -32,7 +44,9 @@ export function parseModelCatalog(payload: unknown): Record<string, unknown>[] {
 }
 
 export async function fetchModelCatalog(session: NativeBrowserSession): Promise<Record<string, unknown>[]> {
-  if (!settings.upstreamApiKey) throw new Error("AISTUDIO_UPSTREAM_API_KEY is not configured");
+  const template = await session.captureTemplate("model-catalog");
+  const apiKey = template.headers["x-goog-api-key"];
+  if (!apiKey) throw new Error("Active AI Studio browser session did not expose x-goog-api-key");
   const byName = new Map((await session.cookies()).map(cookie => [cookie.name, cookie.value]));
   const timestamp = Math.floor(Date.now() / 1000);
   const labels = [
@@ -49,7 +63,7 @@ export async function fetchModelCatalog(session: NativeBrowserSession): Promise<
     "content-type": "application/json+protobuf",
     authorization,
     "x-user-agent": "grpc-web-javascript/0.1",
-    "x-goog-api-key": settings.upstreamApiKey,
+    "x-goog-api-key": apiKey,
     "x-goog-authuser": "0",
   }, "[]");
   if (response.status !== 200) throw new Error(`ListModels returned HTTP ${response.status}`);

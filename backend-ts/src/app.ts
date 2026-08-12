@@ -39,9 +39,6 @@ const FALLBACK_MODELS = [
   "gemini-pro-latest",
   "gemini-flash-latest",
   "gemini-flash-lite-latest",
-  "gemini-embedding-001",
-  "gemini-embedding-2-preview",
-  "gemini-embedding-2",
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,9 +51,7 @@ function bodyRecord(value: unknown): Record<string, unknown> {
 }
 
 function modelCard(id: string): Record<string, unknown> {
-  const methods = id.includes("embedding")
-    ? ["embedContent", "batchEmbedContents"]
-    : id.includes("tts")
+  const methods = id.includes("tts")
       ? ["generateContent"]
       : ["generateContent", "streamGenerateContent"];
   return { name: `models/${id}`, displayName: id, supportedGenerationMethods: methods };
@@ -322,8 +317,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     readonly models: Record<string, unknown>[];
     readonly source: "live" | "fallback";
   }> {
-    // 未配置上游 key 时不触发浏览器和外部 ListModels 请求，直接提供可用的本地目录。
-    if (!settings.upstreamApiKey) return { models: FALLBACK_MODELS.map(modelCard), source: "fallback" };
     try {
       const models = await bridge.request<unknown>("models");
       if (Array.isArray(models)) {
@@ -344,10 +337,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     if (!model) throw new HttpError(404, errorDetail(`Model '${id}' not found`, "not_found"));
     return model;
   });
-  app.post("/v1/embeddings", async (request) => bridge.request("openai_embeddings", { body: bodyRecord(request.body) }));
   app.post<{ Params: { "*": string } }>("/v1beta/*", async (request, reply) => {
     const target = request.params["*"];
-    const match = /^(.*):(generateContent|streamGenerateContent|embedContent|batchEmbedContents)$/u.exec(target);
+    const match = /^(.*):(generateContent|streamGenerateContent)$/u.exec(target);
     if (!match?.[1] || !match[2]) throw new HttpError(404, errorDetail("Not Found", "not_found"));
     const model = match[1];
     const action = match[2];
@@ -356,8 +348,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       await sendStream(reply, (onChunk, signal) => bridge.request("generate", { model, body, stream: true }, onChunk, signal));
       return;
     }
-    if (action === "generateContent") return bridge.request("generate", { model, body, stream: false });
-    return bridge.request("embed", { model, body, batch: action === "batchEmbedContents" });
+    return bridge.request("generate", { model, body, stream: false });
   });
 
   app.addHook("onClose", async () => bridge.stop());

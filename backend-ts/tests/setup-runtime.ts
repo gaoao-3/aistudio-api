@@ -14,7 +14,6 @@ process.env.AISTUDIO_APIKEYS_FILE = join(testRuntimeRoot, "apikeys.json");
 delete process.env.AISTUDIO_AUTH_FILE;
 delete process.env.AISTUDIO_API_KEY;
 delete process.env.AISTUDIO_API_KEYS;
-delete process.env.AISTUDIO_UPSTREAM_API_KEY;
 
 process.once("exit", () => {
   rmSync(testRuntimeRoot, { recursive: true, force: true });

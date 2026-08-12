@@ -1,5 +1,4 @@
 import { NativeBrowserSession } from "./browser-session.js";
-import { settings } from "../config.js";
 import { normalizeGeminiRequest } from "./gemini-normalize.js";
 import { parseAIStudioResponse, toGeminiResponse } from "./response-parser.js";
 import { rewriteWireBody } from "./wire-codec.js";
@@ -121,38 +120,6 @@ export class NativeGateway {
       throw new Error(`AI Studio upstream returned HTTP ${response.status}: ${response.body.slice(0, 500)}`);
     }
     return toGeminiResponse(parseAIStudioResponse(response.body));
-  }
-
-  async embed(model: string, body: Record<string, unknown>, batch: boolean): Promise<Record<string, unknown>> {
-    const modelId = model.replace(/^models\//u, "");
-    if (!modelId) throw new Error("Embedding model is required");
-    let batchBody: Record<string, unknown>;
-    if (Array.isArray(body.requests)) {
-      batchBody = {
-        requests: body.requests.map(item => ({
-          ...(typeof item === "object" && item !== null && !Array.isArray(item) ? item : {}),
-          model: `models/${modelId}`,
-        })),
-      };
-    } else {
-      if (typeof body.content !== "object" || body.content === null || Array.isArray(body.content)) throw new Error("content is required");
-      batchBody = { requests: [{ ...body, model: `models/${modelId}` }] };
-    }
-    const response = await this.session.pageFetch(
-      `${settings.embeddingBaseUrl}/models/${encodeURIComponent(modelId)}:batchEmbedContents`,
-      { "content-type": "application/json", "x-goog-api-key": settings.upstreamApiKey },
-      JSON.stringify(batchBody),
-    );
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(`Embedding upstream returned HTTP ${response.status}: ${response.body.slice(0, 500)}`);
-    }
-    const result = JSON.parse(response.body) as Record<string, unknown>;
-    if (!Array.isArray(result.embeddings)) throw new Error("Embedding upstream response did not contain embeddings");
-    if (batch) return result;
-    return {
-      embedding: result.embeddings[0],
-      ...(result.usageMetadata !== undefined ? { usageMetadata: result.usageMetadata } : {}),
-    };
   }
 
   async inspectAccountProfile(): Promise<AccountProfile> {
