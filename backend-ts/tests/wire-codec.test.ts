@@ -67,4 +67,16 @@ describe("AI Studio wire codec", () => {
     })) as unknown[];
     assert.equal((parsed[3] as unknown[])[16], null);
   });
+
+  it("can force plain-text fallback without reintroducing thinking", () => {
+    const original = JSON.stringify(["models/original", [], null, Array(27).fill(null), "snapshot", null, null]);
+    const parsed = JSON.parse(rewriteWireBody(original, {
+      model: "gemini-3.6-flash",
+      prompt: "final",
+      sanitizePlainText: true,
+      disableThinking: true,
+    })) as unknown[];
+    assert.equal((parsed[3] as unknown[])[16], null);
+    assert.equal((parsed[3] as unknown[])[7], null);
+  });
 });
