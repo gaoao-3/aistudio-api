@@ -122,7 +122,12 @@ export class NativeGateway {
     const normalized = normalizeGeminiRequest(model, body);
     const template = await this.session.captureTemplate(normalized.model);
     const generation = normalized.generationConfig;
-    const makeBody = async (contents: readonly AistudioContent[], tools: unknown[][] | null, sanitizePlainText: boolean): Promise<string> => {
+    const makeBody = async (
+      contents: readonly AistudioContent[],
+      tools: unknown[][] | null,
+      sanitizePlainText: boolean,
+      disableThinking = false,
+    ): Promise<string> => {
       const snapshot = await this.session.generateSnapshot(contents);
       return rewriteWireBody(template.body, {
         model: normalized.model,
@@ -137,7 +142,7 @@ export class NativeGateway {
         ...(typeof generation.topK === "number" ? { topK: generation.topK } : {}),
         ...(typeof generation.maxOutputTokens === "number" ? { maxTokens: generation.maxOutputTokens } : {}),
         sanitizePlainText,
-        disableThinking: normalized.model.toLowerCase().includes("gemini-2.5-flash-image"),
+        disableThinking: disableThinking || normalized.model.toLowerCase().includes("gemini-2.5-flash-image"),
       });
     };
     const replay = async (wireBody: string): Promise<{ status: number; body: string }> => {
@@ -171,16 +176,27 @@ export class NativeGateway {
     }
     const needsFunctionFallback = functionResponseRejected(response.status, response.body)
       || (emulateMixedTools && functionResponseStalled(response.status, response.body));
+    let flattened: AistudioContent[] | undefined;
     if (needsFunctionFallback && hasFunctionResponse(normalized.contents)) {
-      const flattened = flattenFunctionContents(normalized.contents);
+      flattened = flattenFunctionContents(normalized.contents);
       if (emulateMixedTools) {
-        response = await replay(await makeBody(flattened, null, true));
+        response = await replay(await makeBody(flattened, null, true, true));
       } else {
-        response = await replay(await makeBody(flattened, effectiveTools, true));
+        response = await replay(await makeBody(flattened, effectiveTools, true, true));
         if (functionResponseRejected(response.status, response.body)) {
-          response = await replay(await makeBody(flattened, null, true));
+          response = await replay(await makeBody(flattened, null, true, true));
         }
       }
+    }
+    if (flattened && functionResponseStalled(response.status, response.body)) {
+      const finalContents: AistudioContent[] = [
+        ...flattened,
+        {
+          role: "user",
+          parts: [{ text: "The tool result is complete. Return the final answer now in plain text. Do not call any more tools." }],
+        },
+      ];
+      response = await replay(await makeBody(finalContents, null, true, true));
     }
     if (response.status < 200 || response.status >= 300) {
       throw new Error(`AI Studio upstream returned HTTP ${response.status}: ${response.body.slice(0, 500)}`);
