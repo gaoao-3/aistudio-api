@@ -177,16 +177,6 @@ export function decodeContents(raw: unknown): AistudioContent[] {
   return result;
 }
 
-function isFunctionTool(tool: unknown): boolean {
-  return Array.isArray(tool) && Array.isArray(tool[1]) && tool[1].length > 0;
-}
-
-function isBuiltinTool(tool: unknown): boolean {
-  if (!Array.isArray(tool)) return false;
-  if (Object.values(TOOL_TEMPLATES).some(template => JSON.stringify(template) === JSON.stringify(tool))) return true;
-  return Array.isArray(tool[3]);
-}
-
 function setGenerationValue(values: unknown[], name: string, value: unknown): void {
   const index = GENERATION_INDEX[name];
   if (index === undefined) return;
@@ -246,8 +236,7 @@ export function rewriteWireBody(originalBody: string, options: RewriteWireOption
     body[INDEX.safety] = [7, 8, 9, 10].map(category => [null, null, category, 5]);
   }
 
-  let tools = options.tools ?? null;
-  if (tools?.some(isFunctionTool)) tools = tools.filter(tool => !isBuiltinTool(tool));
+  const tools = options.tools ?? null;
   body[INDEX.tools] = tools;
   if (!isImage) {
     if (tools?.length) {

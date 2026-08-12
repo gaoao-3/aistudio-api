@@ -2,10 +2,45 @@ import { NativeBrowserSession } from "./browser-session.js";
 import { normalizeGeminiRequest } from "./gemini-normalize.js";
 import { parseAIStudioResponse, toGeminiResponse } from "./response-parser.js";
 import { rewriteWireBody } from "./wire-codec.js";
-import type { AistudioContent } from "./wire-codec.js";
+import type { AistudioContent, AistudioPart } from "./wire-codec.js";
 import { fetchModelCatalog } from "./model-catalog.js";
 import { IncrementalAIStudioParser } from "./incremental-parser.js";
 import type { AccountProfile } from "../accounts/account-profile.js";
+
+interface ToolGroups {
+  readonly builtins: unknown[][];
+  readonly functions: unknown[][];
+}
+
+function isFunctionTool(tool: unknown[]): boolean {
+  return Array.isArray(tool[1]) && tool[1].length > 0;
+}
+
+export function partitionMixedTools(tools: unknown[][] | null): ToolGroups {
+  const builtins: unknown[][] = [];
+  const functions: unknown[][] = [];
+  for (const tool of tools ?? []) (isFunctionTool(tool) ? functions : builtins).push(tool);
+  return { builtins, functions };
+}
+
+function bridgeBuiltinResult(contents: readonly AistudioContent[], parsed: ReturnType<typeof parseAIStudioResponse>): AistudioContent[] {
+  const parts: AistudioPart[] = [];
+  for (const part of parsed.candidate.parts) {
+    if (typeof part.text === "string") {
+      parts.push({ text: part.text, ...(part.thought === true ? { thought: true } : {}) });
+      continue;
+    }
+    if (part.inlineData && typeof part.inlineData === "object") {
+      const value = part.inlineData as { mimeType?: unknown; data?: unknown };
+      if (typeof value.mimeType === "string" && typeof value.data === "string") parts.push({ inlineData: [value.mimeType, value.data] });
+    }
+  }
+  return [
+    ...contents,
+    { role: "model", parts: parts.length > 0 ? parts : [{ text: parsed.candidate.text }] },
+    { role: "user", parts: [{ text: "Continue the original request using the built-in tool result above. Call an available custom function when the original request requires it." }] },
+  ];
+}
 
 export function functionResponseRejected(status: number, body: string): boolean {
   if (status < 400) return false;
@@ -108,12 +143,31 @@ export class NativeGateway {
         }
       }, signal);
     };
-    let response = await replay(await makeBody(normalized.contents, normalized.tools, false));
+    const toolGroups = partitionMixedTools(normalized.tools);
+    const emulateMixedTools = normalized.includeServerSideToolInvocations
+      && toolGroups.builtins.length > 0
+      && toolGroups.functions.length > 0;
+    const effectiveTools = emulateMixedTools ? toolGroups.functions : normalized.tools;
+    let response: { status: number; body: string };
+    if (emulateMixedTools && !hasFunctionResponse(normalized.contents)) {
+      const builtinResponse = await this.session.replay(await makeBody(normalized.contents, toolGroups.builtins, false));
+      if (builtinResponse.status < 200 || builtinResponse.status >= 300) {
+        throw new Error(`AI Studio built-in tool phase returned HTTP ${builtinResponse.status}: ${builtinResponse.body.slice(0, 500)}`);
+      }
+      const bridged = bridgeBuiltinResult(normalized.contents, parseAIStudioResponse(builtinResponse.body));
+      response = await replay(await makeBody(bridged, toolGroups.functions, false));
+    } else {
+      response = await replay(await makeBody(normalized.contents, effectiveTools, false));
+    }
     if (functionResponseRejected(response.status, response.body) && hasFunctionResponse(normalized.contents)) {
       const flattened = flattenFunctionContents(normalized.contents);
-      response = await replay(await makeBody(flattened, normalized.tools, true));
-      if (functionResponseRejected(response.status, response.body)) {
+      if (emulateMixedTools) {
         response = await replay(await makeBody(flattened, null, true));
+      } else {
+        response = await replay(await makeBody(flattened, effectiveTools, true));
+        if (functionResponseRejected(response.status, response.body)) {
+          response = await replay(await makeBody(flattened, null, true));
+        }
       }
     }
     if (response.status < 200 || response.status >= 300) {

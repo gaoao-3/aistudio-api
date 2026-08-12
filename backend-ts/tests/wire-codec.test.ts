@@ -33,7 +33,7 @@ describe("AI Studio wire codec", () => {
     assert.equal(decoded[0]?.parts[0]?.thoughtSignature, "sig");
   });
 
-  it("filters browser built-ins when custom function declarations are present", () => {
+  it("preserves browser built-ins with custom function declarations", () => {
     const original = '["models/original",[[[[null,"old"]],"user"]],null,[],"snapshot",null,null]';
     const custom = [null, [["weather"]]];
     const parsed = JSON.parse(rewriteWireBody(original, {
@@ -41,7 +41,7 @@ describe("AI Studio wire codec", () => {
       prompt: "hello",
       tools: [buildToolsFromNames(["google_search"], "gemini-3.5-flash")[0]!, custom],
     })) as unknown[];
-    assert.deepEqual(parsed[6], [custom]);
+    assert.deepEqual(parsed[6], [buildToolsFromNames(["google_search"], "gemini-3.5-flash")[0]!, custom]);
     assert.deepEqual(parsed[13], [[null, null, "Asia/Shanghai"]]);
   });
 

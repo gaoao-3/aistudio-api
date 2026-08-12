@@ -33,6 +33,17 @@ describe("Gemini request normalization", () => {
     ]);
   });
 
+  it("enables server-side tool context circulation for Gemini 3 mixed tools", () => {
+    const result = normalizeGeminiRequest("gemini-3.1-pro-preview", {
+      contents: [{ role: "user", parts: [{ text: "search and call" }] }],
+      tools: [
+        { googleSearch: {} },
+        { functionDeclarations: [{ name: "record", parameters: { type: "OBJECT" } }] },
+      ],
+    });
+    assert.equal(result.includeServerSideToolInvocations, true);
+  });
+
   it("encodes nested JSON schema branches", () => {
     assert.deepEqual(encodeSchemaToWire({ type: "array", items: { type: "integer" } }), [5, null, null, null, null, [3]]);
   });

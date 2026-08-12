@@ -9,6 +9,7 @@
     "build": "tsc",
     "smoke:native-browser": "tsx scripts/native-browser-smoke.ts",
     "smoke:native-generate": "tsx scripts/native-generate-smoke.ts",
+    "smoke:native-mixed-tools": "tsx scripts/native-mixed-tools-smoke.ts",
     "test": "tsx --import ./tests/setup-runtime.ts --test tests/**/*.test.ts"
   },
   "dependencies": {

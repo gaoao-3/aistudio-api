@@ -29,6 +29,7 @@ export interface NormalizedGeminiRequest {
   readonly contents: AistudioContent[];
   readonly systemInstruction: AistudioContent | null;
   readonly tools: unknown[][] | null;
+  readonly includeServerSideToolInvocations: boolean;
   readonly safetySettings: unknown[][] | null;
   readonly generationConfig: Record<string, unknown>;
   readonly capturePrompt: string;
@@ -198,6 +199,8 @@ export function normalizeGeminiRequest(modelPath: string, body: unknown): Normal
     ? normalizeContent(body.systemInstruction, "user") : null;
 
   let tools: unknown[][] | null = null;
+  let hasBuiltinTools = false;
+  let hasFunctionTools = false;
   if (body.tools !== undefined) {
     if (!Array.isArray(body.tools)) throw new Error("tools must be an array");
     tools = [];
@@ -209,17 +212,24 @@ export function normalizeGeminiRequest(modelPath: string, body: unknown): Normal
       if (rawTool.googleMaps !== undefined) names.push("google_maps");
       if (rawTool.urlContext !== undefined) names.push("url_context");
       if (Array.isArray(rawTool.functionDeclarations)) {
+        hasFunctionTools = rawTool.functionDeclarations.length > 0 || hasFunctionTools;
         tools.push([null, rawTool.functionDeclarations.map(item => {
           if (!isRecord(item)) throw new Error("functionDeclarations[] must be an object");
           return encodeFunctionDeclaration(item);
         })]);
       }
-      if (names.length > 0) tools.push(...buildToolsFromNames(names, model));
+      if (names.length > 0) {
+        hasBuiltinTools = true;
+        tools.push(...buildToolsFromNames(names, model));
+      }
     }
   }
   if (isTts) tools = null;
 
   const rawGeneration = isRecord(body.generationConfig) ? body.generationConfig : {};
+  const rawToolConfig = isRecord(body.toolConfig) ? body.toolConfig : {};
+  const includeServerSideToolInvocations = rawToolConfig.includeServerSideToolInvocations === true
+    || (model.slice("models/".length).toLowerCase().startsWith("gemini-3") && hasBuiltinTools && hasFunctionTools);
   const generationConfig: Record<string, unknown> = { ...rawGeneration };
   if (rawGeneration.thinkingConfig !== undefined) generationConfig.thinkingConfig = normalizeThinking(rawGeneration.thinkingConfig);
   if (Array.isArray(rawGeneration.responseModalities)) {
@@ -234,6 +244,7 @@ export function normalizeGeminiRequest(modelPath: string, body: unknown): Normal
     contents,
     systemInstruction,
     tools,
+    includeServerSideToolInvocations,
     safetySettings: normalizeSafety(body.safetySettings),
     generationConfig,
     capturePrompt,
