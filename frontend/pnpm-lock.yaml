@@ -18,8 +18,8 @@ importers:
         specifier: ^6.1.0
         version: 6.1.0
       highlight.js:
-        specifier: ^11.11.1
-        version: 11.11.1
+        specifier: ^11.12.0
+        version: 11.12.0
       katex:
         specifier: ^0.18.1
         version: 0.18.1
@@ -806,8 +806,8 @@ packages:
     resolution: {integrity: sha512-ax7ZYomf6jqPTQ4+XCpUGyXKHk5WweS+e05MBO4/y3WJ5RkmPXNKvX+bx1behVILVwr6JSQvZAku021CHPXG3Q==}
     engines: {node: '>=10'}
 
-  highlight.js@11.11.1:
-    resolution: {integrity: sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==}
+  highlight.js@11.12.0:
+    resolution: {integrity: sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==}
     engines: {node: '>=12.0.0'}
 
   import-meta-resolve@4.2.0:
@@ -1711,7 +1711,7 @@ snapshots:
     dependencies:
       duplexer: 0.1.2
 
-  highlight.js@11.11.1: {}
+  highlight.js@11.12.0: {}
 
   import-meta-resolve@4.2.0: {}
 
@@ -1766,7 +1766,7 @@ snapshots:
       date-fns: 4.4.0
       date-fns-tz: 3.2.0(date-fns@4.4.0)
       evtd: 0.2.4
-      highlight.js: 11.11.1
+      highlight.js: 11.12.0
       lodash: 4.18.1
       lodash-es: 4.18.1
       seemly: 0.3.10
